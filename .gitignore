@@ -1,0 +1,13 @@
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Built app bundle + generated icon (produced by scripts/bundle.sh)
+Kates.app/
+icon_1024.png
+
+.DS_Store
+
+.claude/
