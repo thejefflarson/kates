@@ -14,6 +14,7 @@ let package = Package(
         .package(url: "https://github.com/swiftkube/client.git", from: "0.26.0"),
         .package(url: "https://github.com/swiftkube/model.git", from: "0.19.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
     ],
     targets: [
         .target(
@@ -26,7 +27,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "Kates",
-            dependencies: ["KubeKit"]
+            dependencies: [
+                "KubeKit",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ]
         ),
         .testTarget(
             name: "KubeKitTests",

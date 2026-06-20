@@ -5,83 +5,116 @@
 
 </div>
 
-A native macOS UI for Kubernetes. Browse any resource your cluster exposes, watch live metrics and logs, and act on workloads — all from a fast SwiftUI app that talks to the Kubernetes API directly, with no `kubectl` shell-outs and no web runtime.
+Kates is a native macOS application for working with Kubernetes clusters. It talks to the Kubernetes API directly over mutually-authenticated TLS — there are no `kubectl` shell-outs and no embedded web browser — so it starts quickly, stays responsive, and feels like a Mac app rather than a website in a window.
 
-## What it does
+You point Kates at a kubeconfig, and it discovers every resource type your cluster exposes, lets you browse and search them in live tables, and gives you the everyday tools you reach for in `kubectl`: logs, resource usage, events, and a handful of safe actions.
 
-- **Dynamic resource discovery** — the sidebar is built from the cluster's own API discovery (`/api`, `/apis/*`), so *every* type shows up, grouped by API group — core resources, `apps`, CRDs' custom resources, everything
-- **Live tables** — auto-refresh on a tunable interval (Off / 1s / 2s / 5s / 10s), every column sortable, with a full-width table that splits to reveal details when you open a resource
-- **Top (metrics)** — CPU and memory for pods and nodes via `metrics.k8s.io`, plus **% of requests and % of limits** per pod (over-limit highlighted)
-- **Live logs** — selecting a pod opens an embedded log pane that tails the last lines and follows automatically, with a follow toggle, full-log fetch, container picker, and copy
-- **YAML viewer** — kubectl-style YAML for the selected object, with one-click copy
-- **Events** — rendered like `kubectl events`: Last Seen · Type · Reason · Object · Message, newest first
-- **Actions** — delete pods, scale deployments, inspect a pod's containers and a node's running pods
-- **Multi-context & all-namespaces** — switch kube contexts and namespaces from the toolbar, or view across all namespaces at once
-- **Native mTLS** — client-certificate auth and custom CA handled directly from your kubeconfig (no keychain round-trip)
+## Features
 
-## Requirements
+### Browse anything in the cluster
 
-- macOS 14.4 or later
-- Swift 6 toolchain (Xcode 16 or later)
-- A reachable cluster and a kubeconfig (selected in-app via **Open Kubeconfig…**)
+The sidebar is built from the cluster's own API discovery endpoints rather than a fixed list, so every resource type appears automatically — the built-in kinds, everything under `apps` and the other API groups, and the custom resources defined by any installed CRDs. Types are grouped by API group so the list stays organized even on a busy cluster.
 
-## Building
+You can switch between kube contexts and namespaces from the toolbar, or choose **All Namespaces** to view a resource across the entire cluster at once. Every table column is sortable, and the tables refresh themselves automatically on an interval you control (anywhere from one second to ten, or off entirely).
+
+### See what's happening
+
+- **Logs.** Selecting a pod opens a log pane right in the detail view. It starts by tailing the most recent lines and then follows the stream live. You can turn following off, pull the complete log on demand, switch between containers, and copy the buffer.
+- **Resource usage.** When `metrics-server` is available, Kates shows live CPU and memory for both pods and nodes. For pods it also computes usage as a percentage of the configured requests and limits, and flags anything running over its limit.
+- **Events.** The Events view is laid out like `kubectl events` — last-seen time, type, reason, involved object, and the full message — sorted with the most recent at the top.
+- **YAML.** Every object has a YAML view rendered in the same style as `kubectl get -o yaml`, with one-click copy.
+
+### Act on workloads
+
+Kates covers the most common day-to-day operations: delete a pod, scale a deployment, inspect the individual containers inside a pod (with their state, restart counts, and images), and see which pods are scheduled onto a given node.
+
+## Installation
+
+Download the latest release from the [Releases page](https://github.com/thejefflarson/kates/releases/latest), move `Kates.app` to your Applications folder, and open it. Kates checks for updates automatically using [Sparkle](https://sparkle-project.org); you can also trigger a check from **Kates → Check for Updates…**.
+
+On first launch, open **Open Kubeconfig…** in the toolbar and select your kubeconfig file. Kates remembers your choice for next time.
+
+> [!NOTE]
+> Applications launched from Finder or the Dock do not inherit your shell's `$KUBECONFIG` environment variable. This is why Kates asks you to choose the file explicitly rather than guessing — and why the first thing you'll see is the **Open Kubeconfig…** button.
+
+## Building from source
+
+Kates is a Swift Package; there is no Xcode project to manage.
 
 ```bash
-# Build and assemble a double-clickable Kates.app (release)
+# Assemble a double-clickable, optimized Kates.app
 ./scripts/bundle.sh
 
-# …or for fast iteration during development
+# Or, for fast iteration during development
 swift run
 ```
 
-`scripts/bundle.sh` compiles, renders the app icon, builds `AppIcon.icns`, and assembles `Kates.app` with its `Info.plist`. Pass `debug` (`./scripts/bundle.sh debug`) for a much faster, unoptimized bundle.
+`scripts/bundle.sh` compiles the app in release configuration, renders the icon into an `.icns`, embeds the Sparkle framework, and assembles `Kates.app` with its `Info.plist`. Pass `debug` (`./scripts/bundle.sh debug`) to produce an unoptimized bundle far more quickly while developing.
 
-> [!NOTE]
-> GUI apps launched from Finder/Dock don't inherit your shell's `$KUBECONFIG`. On first launch, use **Open Kubeconfig…** in the toolbar to pick your config; the choice is remembered across launches.
+### Requirements
 
-## Running tests
+- macOS 14.4 or later
+- A Swift 6 toolchain (Xcode 16 or later)
+- A reachable cluster and a kubeconfig
+
+### Running the tests
 
 ```bash
 swift test
 ```
 
-## Architecture
+The test suite covers KubeKit in isolation — display formatting, metric quantity parsing, and kubeconfig parsing — and does not require a live cluster.
+
+## How it's built
+
+Kates is split into two targets. **KubeKit** is a small library that owns everything to do with talking to Kubernetes; it is the only part of the codebase that imports [SwiftkubeClient](https://github.com/swiftkube/client). **Kates** is the SwiftUI application, which depends only on KubeKit's own types. Because the entire client surface is wrapped behind a single `ClusterService`, replacing or upgrading the underlying client would touch one file rather than the whole app.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Kates (SwiftUI app)                                           │
-│   KatesApp · AppModel (@Observable)                            │
-│   ├─ ContentView ── sidebar (discovered types) + toolbar       │
-│   ├─ ResourceListView ── live, sortable Table  ┐ vertical      │
-│   └─ DetailView ── YAML · containers · actions ┘ split         │
-│        └─ LogPane (embedded, follows live)                     │
-│                          │                                     │
-│                          ▼                                     │
-│  KubeKit (the only module that imports SwiftkubeClient)        │
-│   ClusterService ── discovery · generic list · logs · metrics  │
-│                     · scale · delete · per-context connection  │
-│   ContextStore ── kubeconfig façade   Discovery ── GVR + types │
+│  Kates  (SwiftUI application)                                  │
+│                                                                │
+│   AppModel (@Observable) drives the UI:                        │
+│     • ContentView      — sidebar of discovered types + toolbar │
+│     • ResourceListView — the live, sortable resource table     │
+│     • DetailView       — YAML, containers, and actions         │
+│         └─ LogPane     — embedded, follows logs live           │
+│                              │                                 │
+│                              ▼                                 │
+│  KubeKit  (the cluster boundary)                               │
+│     ClusterService — discovery, generic listing, logs,         │
+│                      metrics, scale, delete, per-context conn. │
+│     ContextStore   — kubeconfig loading and context selection  │
+│     Discovery      — API resource types and generic objects    │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The whole SwiftkubeClient surface is wrapped behind `ClusterService`, so the rest of the app deals only in KubeKit types — swapping the client implementation touches one file.
-
-Built on [SwiftkubeClient](https://github.com/swiftkube/client) + [SwiftkubeModel](https://github.com/swiftkube/model) (SwiftNIO / AsyncHTTPClient) and [Yams](https://github.com/jpsim/Yams). Pure Swift + SwiftUI — no Electron, no web runtime.
+The networking stack is SwiftNIO and AsyncHTTPClient (by way of SwiftkubeClient and [SwiftkubeModel](https://github.com/swiftkube/model)), YAML rendering uses [Yams](https://github.com/jpsim/Yams), and automatic updates use [Sparkle](https://github.com/sparkle-project/Sparkle). It is pure Swift and SwiftUI throughout — no Electron and no web runtime.
 
 ## Project layout
 
 ```
 Sources/
-├── KubeKit/      # Cluster boundary: ClusterService, ContextStore, Discovery,
-│                 #   Display helpers, errors  (imports SwiftkubeClient/Model)
-└── Kates/        # SwiftUI app: KatesApp, AppModel, ContentView,
-                  #   ResourceListView, DetailView, LogsView (LogPane), FilePanel
+├── KubeKit/      Cluster boundary — ClusterService, ContextStore, Discovery,
+│                 display helpers, and errors. Imports SwiftkubeClient/Model.
+└── Kates/        SwiftUI app — KatesApp, AppModel, the views, the Sparkle
+                  updater, and the kubeconfig file picker.
 
-Tests/            # KubeKit unit tests (display logic, kubeconfig parsing)
-scripts/          # make_icon.swift (icon renderer), bundle.sh (.app assembly)
+Tests/            KubeKit unit tests.
+scripts/          make_icon.swift (icon renderer), bundle.sh (.app assembly),
+                  and release.sh (signed, notarized, Sparkle-published release).
+appcast.xml       The Sparkle update feed.
 ```
+
+## Releasing
+
+Releases are cut with `scripts/release.sh`, which builds and signs the app, packages it, signs the package for Sparkle, appends an entry to `appcast.xml`, and publishes a GitHub release:
+
+```bash
+./scripts/release.sh v0.2.0
+```
+
+The script expects an Ed25519 key pair for signing updates (generated once with Sparkle's `generate_keys`, with the public half recorded in the app's `Info.plist`) and, for a Gatekeeper-friendly download, an Apple Developer ID certificate plus notarization credentials. See the comments at the top of the script for the one-time setup. Sparkle clients read the feed from `appcast.xml` on `main`.
 
 ## License
 
-MIT
+Kates is released under the [MIT License](LICENSE).

@@ -4,6 +4,7 @@ import AppKit
 @main
 struct KatesApp: App {
     @State private var model = AppModel()
+    @StateObject private var updater = UpdaterViewModel()
 
     init() {
         // Ensure the SPM-built executable behaves as a regular foreground app.
@@ -18,5 +19,10 @@ struct KatesApp: App {
                 .task { await model.bootstrap() }
         }
         .windowToolbarStyle(.unified)
+        .commands {
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesCommand(updater: updater)
+            }
+        }
     }
 }
