@@ -5,14 +5,14 @@
 # Usage:
 #   ./scripts/release.sh v0.2.0
 #
-# Signing & notarization (optional but recommended for a Gatekeeper-friendly
-# download). If a "Developer ID Application" certificate is in your keychain it
-# is used automatically; otherwise the build is ad-hoc signed (users must
-# right-click → Open). To notarize, set up a keychain profile once:
-#   xcrun notarytool store-credentials "KatesNotarization" \
-#     --apple-id "you@example.com" --team-id "ABCDE12345" \
-#     --password "app-specific-password"
-# then run with NOTARY_PROFILE=KatesNotarization.
+# Signing & notarization (recommended for a Gatekeeper-friendly download). If a
+# "Developer ID Application" certificate is in your keychain it is used
+# automatically; otherwise the build is ad-hoc signed (users must right-click →
+# Open). Notarization defaults to the keychain profile NOTARY_PROFILE, which
+# defaults to "ClaudeMonitorNotarization". Override it (NOTARY_PROFILE=other) or
+# set it empty (NOTARY_PROFILE=) to skip. Create a profile once with:
+#   xcrun notarytool store-credentials "ClaudeMonitorNotarization" \
+#     --apple-id "you@example.com" --team-id "ABCDE12345"
 #
 # Update signing always uses Sparkle's Ed25519 key from your login keychain
 # (created once with Sparkle's generate_keys; public half is in Info.plist).
@@ -29,6 +29,9 @@ cd "$ROOT"
 REPO="thejefflarson/kates"
 APP="$ROOT/Kates.app"
 SHORT_VERSION="${VERSION#v}"
+# Default notarization keychain profile (override by exporting NOTARY_PROFILE).
+# Set to "" to skip notarization entirely.
+NOTARY_PROFILE="${NOTARY_PROFILE:-ClaudeMonitorNotarization}"
 
 # ── Preconditions ─────────────────────────────────────────────────────────────
 
