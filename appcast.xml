@@ -5,5 +5,13 @@
     <link>https://github.com/thejefflarson/kates</link>
     <description>Kates changelog</description>
     <language>en</language>
+    <item>
+      <title>Kates 0.1.0</title>
+      <pubDate>Sun, 21 Jun 2026 02:32:09 +0000</pubDate>
+      <sparkle:version>1</sparkle:version>
+      <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.4</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/thejefflarson/kates/releases/download/v0.1.0/Kates-v0.1.0.zip" sparkle:edSignature="qZ8xa1rWGLTnn/4RtmUrIvYDbDC4Z4aZK+XZf7ZRg4B/s5Zuc0Frs/2NtALDfOSJHapo+gNrUjkjYw+0aG3tCQ==" length="13067643" type="application/octet-stream" />
+    </item>
   </channel>
 </rss>
