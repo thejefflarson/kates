@@ -181,14 +181,27 @@ public final class ClusterService: Sendable {
     ) -> AsyncThrowingStream<String, Error> {
         let client = self.client
         return AsyncThrowingStream { continuation in
+            // SwiftkubeClient defaults `follow` to `RetryStrategy.never`, which
+            // means the moment the stream ends — an idle timeout, an API-server
+            // hiccup, a server-closed connection — the task throws
+            // `maxRetriesReached` instead of reconnecting. A live tail should
+            // survive transient drops, so reconnect indefinitely with backoff.
+            let strategy = RetryStrategy(
+                policy: .always,
+                backoff: .exponential(maximumDelay: 30.0, multiplier: 2.0),
+                initialDelay: 1.0,
+                jitter: 0.2)
+            let box = FollowTaskBox()
             let outer = Task {
                 do {
                     let task = try await client.pods.follow(
                         in: .namespace(namespace),
                         name: pod,
                         container: container,
-                        tailLines: tailLines
+                        tailLines: tailLines,
+                        retryStrategy: strategy
                     )
+                    await box.store(task)
                     for try await line in await task.start() {
                         continuation.yield(line)
                     }
@@ -197,7 +210,12 @@ public final class ClusterService: Sendable {
                     continuation.finish(throwing: KubeError.underlying("\(error)"))
                 }
             }
-            continuation.onTermination = { _ in outer.cancel() }
+            // The follow now reconnects forever, so tearing the pane down must
+            // cancel both our consuming task and the underlying connection.
+            continuation.onTermination = { _ in
+                outer.cancel()
+                Task { await box.cancel() }
+            }
         }
     }
 
@@ -285,6 +303,21 @@ public final class ClusterService: Sendable {
             if let v = Double(s.dropLast(suffix.count)) { return Int64(v * multiplier) }
         }
         return Int64(Double(s) ?? 0)
+    }
+}
+
+/// Holds the in-flight follow task so the stream's termination handler can tear
+/// down the underlying connection. `SwiftkubeClientTask` is an actor, so its
+/// `cancel()` must be awaited — this box bridges the synchronous `onTermination`
+/// callback to that async call.
+private actor FollowTaskBox {
+    private var task: SwiftkubeClientTask<String>?
+
+    func store(_ task: SwiftkubeClientTask<String>) { self.task = task }
+
+    func cancel() async {
+        await task?.cancel()
+        task = nil
     }
 }
 

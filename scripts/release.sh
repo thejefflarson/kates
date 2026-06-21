@@ -66,7 +66,7 @@ fi
 # ── Test, build, sign ─────────────────────────────────────────────────────────
 
 echo "→ running tests"
-swift test --quiet
+swift test --quiet --disable-sandbox
 
 echo "→ building Kates.app $SHORT_VERSION (build $BUILD_NUMBER)"
 MARKETING_VERSION="$SHORT_VERSION" BUILD_NUMBER="$BUILD_NUMBER" \
