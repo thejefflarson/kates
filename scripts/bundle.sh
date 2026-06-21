@@ -85,7 +85,26 @@ PLIST
 # locally; release.sh re-signs with a Developer ID for distribution.
 IDENTITY="${CODESIGN_IDENTITY:--}"
 echo "==> Code signing (${IDENTITY})…"
-codesign --force --deep --sign "$IDENTITY" "$APP"
+if [[ "$IDENTITY" == "-" ]]; then
+    # Ad-hoc: a single deep signature is enough to launch locally.
+    codesign --force --deep --sign - "$APP"
+else
+    # Developer ID: --deep is unreliable for a framework with nested helpers
+    # (Apple discourages it), and a distributable signature needs a secure
+    # timestamp + the hardened runtime. Sparkle bundles an Autoupdate binary,
+    # an Updater.app, and two XPC services, each of which is independent code —
+    # sign them inside-out, deepest first, then the framework, then the app.
+    SIGN=(codesign --force --timestamp --options runtime --sign "$IDENTITY")
+    FW="$APP/Contents/Frameworks/Sparkle.framework"
+    V="$FW/Versions/Current"
+    "${SIGN[@]}" "$V/XPCServices/Downloader.xpc"
+    "${SIGN[@]}" "$V/XPCServices/Installer.xpc"
+    "${SIGN[@]}" "$V/Autoupdate"
+    "${SIGN[@]}" "$V/Updater.app"
+    "${SIGN[@]}" "$FW"
+    "${SIGN[@]}" "$APP/Contents/MacOS/Kates"
+    "${SIGN[@]}" "$APP"
+fi
 codesign --verify --deep --strict "$APP" && echo "    signature OK"
 
 touch "$APP"
