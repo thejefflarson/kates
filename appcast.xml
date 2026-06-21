@@ -13,5 +13,13 @@
       <sparkle:minimumSystemVersion>14.4</sparkle:minimumSystemVersion>
       <enclosure url="https://github.com/thejefflarson/kates/releases/download/v0.1.0/Kates-v0.1.0.zip" sparkle:edSignature="qZ8xa1rWGLTnn/4RtmUrIvYDbDC4Z4aZK+XZf7ZRg4B/s5Zuc0Frs/2NtALDfOSJHapo+gNrUjkjYw+0aG3tCQ==" length="13067643" type="application/octet-stream" />
     </item>
+    <item>
+      <title>Kates 0.1.1</title>
+      <pubDate>Sun, 21 Jun 2026 23:52:26 +0000</pubDate>
+      <sparkle:version>2</sparkle:version>
+      <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.4</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/thejefflarson/kates/releases/download/v0.1.1/Kates-v0.1.1.zip" sparkle:edSignature="C8sbzh/EREphKF+T0uW/ocB8VHZjrz0ApP8fmmQwMhRXV2bsHyj+K/yTl7KMd+i4zIG6jAittmlUax3jUnWgBg==" length="13070951" type="application/octet-stream" />
+    </item>
   </channel>
 </rss>
