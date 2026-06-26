@@ -8,6 +8,9 @@ struct LogPane: View {
     let object: GenericObject
 
     private static let tailCount = 10
+    // Cap retained lines so an indefinite follow on a chatty pod can't grow
+    // memory without bound — we only ever display a tail anyway.
+    private static let maxLines = 5_000
 
     @State private var selectedContainer: String?
     @State private var follow = true
@@ -103,6 +106,9 @@ struct LogPane: View {
                                                         tailLines: Self.tailCount) {
                     let newLines = chunk.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
                     lines.append(contentsOf: newLines)
+                    if lines.count > Self.maxLines {
+                        lines.removeFirst(lines.count - Self.maxLines)
+                    }
                 }
             } catch is CancellationError {
                 // expected on container switch / deselect

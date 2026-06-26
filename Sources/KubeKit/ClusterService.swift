@@ -180,7 +180,11 @@ public final class ClusterService: Sendable {
         tailLines: Int = 500
     ) -> AsyncThrowingStream<String, Error> {
         let client = self.client
-        return AsyncThrowingStream { continuation in
+        // Bound the in-flight buffer: a flooding pod can emit lines faster than
+        // the main-actor consumer drains them, and an unbounded policy would let
+        // that backlog grow without limit. We only display a tail, so dropping
+        // the oldest buffered lines under pressure is the right trade-off.
+        return AsyncThrowingStream(String.self, bufferingPolicy: .bufferingNewest(10_000)) { continuation in
             // SwiftkubeClient defaults `follow` to `RetryStrategy.never`, which
             // means the moment the stream ends — an idle timeout, an API-server
             // hiccup, a server-closed connection — the task throws
