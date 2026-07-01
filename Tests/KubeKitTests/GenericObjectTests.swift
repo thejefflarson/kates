@@ -194,6 +194,39 @@ final class GenericObjectTests: XCTestCase {
         XCTAssertNotNil(obj.eventLastTime)                          // fractional-seconds parse
     }
 
+    // MARK: Heavy-metadata trimming (memory)
+
+    func testStripsManagedFieldsAndLastAppliedAnnotation() {
+        var m = objectMeta(name: "web", namespace: "default", uid: "uid-1")
+        var mf = meta.v1.ManagedFieldsEntry()
+        mf.manager = "kubectl-client-side-apply"
+        m.managedFields = [mf]
+        m.annotations = [
+            "kubectl.kubernetes.io/last-applied-configuration": "{\"huge\":\"blob\"}",
+            "app": "web",
+        ]
+
+        let obj = GenericObject(UnstructuredResource(properties: ["kind": "Pod", "metadata": m]))
+        let yaml = obj.renderYAML()
+
+        // The two heavy, never-displayed bits are gone…
+        XCTAssertFalse(yaml.contains("kubectl-client-side-apply"))
+        XCTAssertFalse(yaml.contains("last-applied-configuration"))
+        // …but real metadata survives.
+        XCTAssertTrue(yaml.contains("app"))
+        XCTAssertEqual(obj.name, "web")
+        XCTAssertEqual(obj.id, "uid-1")
+    }
+
+    func testTrimmingIsANoOpWithoutHeavyMetadata() {
+        let obj = object(kind: "Pod",
+                         meta: objectMeta(name: "web", namespace: "default", uid: "uid-1"), [
+            "spec": dict(["nodeName": "node-1"]),
+        ])
+        XCTAssertEqual(obj.nodeName, "node-1")   // untouched objects still parse
+        XCTAssertEqual(obj.name, "web")
+    }
+
     func testEventDefaults() {
         let obj = object(kind: "Event", meta: objectMeta(name: "evt"), [:])
         XCTAssertEqual(obj.eventMessage, "")

@@ -39,18 +39,36 @@ public struct GenericObject: Identifiable, Sendable {
     let raw: UnstructuredResource
 
     init(_ resource: UnstructuredResource) {
-        let meta = resource.metadata
+        let trimmed = Self.trimmingHeavyMetadata(resource)
+        let meta = trimmed.metadata
         self.name = meta?.name ?? "—"
         self.namespace = meta?.namespace
         self.createdAt = meta?.creationTimestamp
-        self.kind = resource.kind
+        self.kind = trimmed.kind
         if let uid = meta?.uid {
             self.id = uid
         } else {
             let ns = meta?.namespace.map { "\($0)/" } ?? ""
             self.id = "\(ns)\(meta?.name ?? "?")"
         }
-        self.raw = resource
+        self.raw = trimmed
+    }
+
+    /// Server-side-apply `managedFields` and the `last-applied-configuration`
+    /// annotation are the largest parts of a typical Kubernetes object and are
+    /// never displayed. Dropping them stops live tables from retaining megabytes
+    /// of bookkeeping across every refresh (and declutters the YAML view).
+    private static let lastAppliedKey = "kubectl.kubernetes.io/last-applied-configuration"
+    private static func trimmingHeavyMetadata(_ resource: UnstructuredResource) -> UnstructuredResource {
+        guard var meta = resource.metadata,
+              meta.managedFields != nil || meta.annotations?[lastAppliedKey] != nil
+        else { return resource }
+        meta.managedFields = nil
+        meta.annotations?[lastAppliedKey] = nil
+        if meta.annotations?.isEmpty == true { meta.annotations = nil }
+        var props = resource.properties
+        props["metadata"] = meta
+        return UnstructuredResource(properties: props)
     }
 
     public var age: String { shortAge(since: createdAt) }
