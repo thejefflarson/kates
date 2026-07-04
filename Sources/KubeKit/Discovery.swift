@@ -21,6 +21,7 @@ public struct APIResourceType: Identifiable, Sendable, Hashable {
 
     public var isPod: Bool { group.isEmpty && name == "pods" }
     public var isNode: Bool { group.isEmpty && name == "nodes" }
+    public var isService: Bool { group.isEmpty && name == "services" }
     public var isDeployment: Bool { group == "apps" && name == "deployments" }
     public var isEvent: Bool { (group.isEmpty || group == "events.k8s.io") && name == "events" }
 
@@ -153,6 +154,51 @@ public struct GenericObject: Identifiable, Sendable {
     /// `status.podIP` (pods) — the `kubectl -o wide` IP column.
     public var podIP: String? {
         (raw.properties["status"] as? [String: any Sendable])?["podIP"] as? String
+    }
+
+    // MARK: Node `-o wide` columns (status.addresses / status.nodeInfo)
+
+    public var nodeInternalIP: String? { nodeAddress("InternalIP") }
+    public var nodeOSImage: String? { nodeInfo("osImage") }
+    public var nodeKernelVersion: String? { nodeInfo("kernelVersion") }
+    public var nodeContainerRuntime: String? { nodeInfo("containerRuntimeVersion") }
+
+    private func nodeAddress(_ type: String) -> String? {
+        guard let status = raw.properties["status"] as? [String: any Sendable],
+              let addresses = status["addresses"] as? [any Sendable] else { return nil }
+        for a in addresses {
+            if let d = a as? [String: any Sendable], d["type"] as? String == type {
+                return d["address"] as? String
+            }
+        }
+        return nil
+    }
+
+    private func nodeInfo(_ key: String) -> String? {
+        guard let status = raw.properties["status"] as? [String: any Sendable],
+              let info = status["nodeInfo"] as? [String: any Sendable] else { return nil }
+        return info[key] as? String
+    }
+
+    // MARK: Service `-o wide` columns (spec.type / spec.clusterIP / spec.ports)
+
+    public var serviceType: String? { specString("type") }
+    public var serviceClusterIP: String? { specString("clusterIP") }
+
+    /// "80/TCP,443/TCP"-style port summary.
+    public var servicePorts: String {
+        guard let spec = raw.properties["spec"] as? [String: any Sendable],
+              let ports = spec["ports"] as? [any Sendable] else { return "" }
+        return ports.compactMap { item -> String? in
+            guard let d = item as? [String: any Sendable] else { return nil }
+            let port = (d["port"] as? Int) ?? Int(d["port"] as? Double ?? 0)
+            let proto = d["protocol"] as? String ?? "TCP"
+            return "\(port)/\(proto)"
+        }.joined(separator: ",")
+    }
+
+    private func specString(_ key: String) -> String? {
+        (raw.properties["spec"] as? [String: any Sendable])?[key] as? String
     }
 
     /// `spec.replicas` (deployments/statefulsets), if present.

@@ -154,6 +154,50 @@ final class GenericObjectTests: XCTestCase {
         XCTAssertNil(pending.podIP)
     }
 
+    func testNodeWideColumns() {
+        let node = object(kind: "Node", meta: objectMeta(name: "node-1"), [
+            "status": dict([
+                "addresses": arr([
+                    dict(["type": "InternalIP", "address": "192.168.0.20"]),
+                    dict(["type": "Hostname", "address": "node-1"]),
+                ]),
+                "nodeInfo": dict([
+                    "osImage": "Ubuntu 22.04.3 LTS",
+                    "kernelVersion": "5.15.0-89-generic",
+                    "containerRuntimeVersion": "containerd://1.7.2",
+                ]),
+            ]),
+        ])
+        XCTAssertEqual(node.nodeInternalIP, "192.168.0.20")
+        XCTAssertEqual(node.nodeOSImage, "Ubuntu 22.04.3 LTS")
+        XCTAssertEqual(node.nodeKernelVersion, "5.15.0-89-generic")
+        XCTAssertEqual(node.nodeContainerRuntime, "containerd://1.7.2")
+
+        let bare = object(kind: "Node", meta: objectMeta(name: "n2"), ["status": dict([:])])
+        XCTAssertNil(bare.nodeInternalIP)
+        XCTAssertNil(bare.nodeOSImage)
+    }
+
+    func testServiceWideColumns() {
+        let svc = object(kind: "Service", meta: objectMeta(name: "web", namespace: "default"), [
+            "spec": dict([
+                "type": "ClusterIP",
+                "clusterIP": "10.96.0.10",
+                "ports": arr([
+                    dict(["port": 80, "protocol": "TCP"]),
+                    dict(["port": 443.0, "protocol": "TCP"]),   // Double from JSON
+                ]),
+            ]),
+        ])
+        XCTAssertEqual(svc.serviceType, "ClusterIP")
+        XCTAssertEqual(svc.serviceClusterIP, "10.96.0.10")
+        XCTAssertEqual(svc.servicePorts, "80/TCP,443/TCP")
+
+        let empty = object(kind: "Service", meta: objectMeta(name: "s2"), ["spec": dict([:])])
+        XCTAssertEqual(empty.servicePorts, "")
+        XCTAssertNil(empty.serviceType)
+    }
+
     func testSpecReplicasIntAndDouble() {
         let intReplicas = object(kind: "Deployment", meta: objectMeta(name: "api"),
                                  ["spec": dict(["replicas": 3])])

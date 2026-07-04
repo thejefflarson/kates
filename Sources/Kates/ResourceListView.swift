@@ -100,6 +100,8 @@ struct ResourceListView: View {
             let showsUsage = model.selectedType?.hasMetrics ?? false
             let showsPercents = model.selectedType?.isPod ?? false
             let showsWide = model.selectedType?.isPod ?? false
+            let isNode = model.selectedType?.isNode ?? false
+            let isService = model.selectedType?.isService ?? false
 
             Table(rows, selection: $model.selectedResourceID, sortOrder: $sortOrder) {
                 TableColumn("Name", value: \.name) { Text($0.name).fontWeight(.medium) }
@@ -141,6 +143,41 @@ struct ResourceListView: View {
                     }
                     .width(min: 90, ideal: 120)
                 }
+                // kubectl -o wide extras (nodes).
+                if isNode {
+                    TableColumn("Internal-IP", value: \.nodeInternalIP) {
+                        Text($0.nodeInternalIP).foregroundStyle(.secondary).monospacedDigit()
+                    }
+                    .width(min: 90, ideal: 120)
+                    TableColumn("OS", value: \.nodeOSImage) {
+                        Text($0.nodeOSImage).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    }
+                    .width(min: 100, ideal: 160)
+                    TableColumn("Kernel", value: \.nodeKernelVersion) {
+                        Text($0.nodeKernelVersion).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    }
+                    .width(min: 90, ideal: 130)
+                    TableColumn("Runtime", value: \.nodeContainerRuntime) {
+                        Text($0.nodeContainerRuntime).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    }
+                    .width(min: 90, ideal: 140)
+                }
+                // kubectl -o wide extras (services).
+                if isService {
+                    TableColumn("Type", value: \.serviceType) {
+                        Text($0.serviceType).foregroundStyle(.secondary)
+                    }
+                    .width(min: 80, ideal: 100)
+                    TableColumn("Cluster-IP", value: \.serviceClusterIP) {
+                        Text($0.serviceClusterIP).foregroundStyle(.secondary).monospacedDigit()
+                    }
+                    .width(min: 90, ideal: 120)
+                    TableColumn("Ports", value: \.servicePorts) {
+                        Text($0.servicePorts).foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
+                    .width(min: 90, ideal: 150)
+                }
                 TableColumn("Age", value: \.sortCreated) {
                     Text($0.age).foregroundStyle(.secondary).monospacedDigit()
                 }
@@ -172,6 +209,17 @@ struct ResourceRow: Identifiable {
     // `kubectl -o wide` pod columns.
     var node: String { object.nodeName ?? "—" }
     var podIP: String { object.podIP ?? "—" }
+
+    // `kubectl -o wide` node columns.
+    var nodeInternalIP: String { object.nodeInternalIP ?? "—" }
+    var nodeOSImage: String { object.nodeOSImage ?? "—" }
+    var nodeKernelVersion: String { object.nodeKernelVersion ?? "—" }
+    var nodeContainerRuntime: String { object.nodeContainerRuntime ?? "—" }
+
+    // `kubectl -o wide` service columns.
+    var serviceType: String { object.serviceType ?? "—" }
+    var serviceClusterIP: String { object.serviceClusterIP ?? "—" }
+    var servicePorts: String { object.servicePorts.isEmpty ? "—" : object.servicePorts }
 
     var cpuMilli: Int { usage?.cpuMillicores ?? -1 }
     var memBytes: Int64 { usage?.memoryBytes ?? -1 }
