@@ -145,6 +145,15 @@ final class GenericObjectTests: XCTestCase {
         XCTAssertNil(pending.nodeName)
     }
 
+    func testPodIP() {
+        let running = object(kind: "Pod", meta: objectMeta(name: "web"),
+                             ["status": dict(["podIP": "10.1.2.3"])])
+        XCTAssertEqual(running.podIP, "10.1.2.3")
+
+        let pending = object(kind: "Pod", meta: objectMeta(name: "web"), ["status": dict([:])])
+        XCTAssertNil(pending.podIP)
+    }
+
     func testSpecReplicasIntAndDouble() {
         let intReplicas = object(kind: "Deployment", meta: objectMeta(name: "api"),
                                  ["spec": dict(["replicas": 3])])

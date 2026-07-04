@@ -99,6 +99,7 @@ struct ResourceListView: View {
             let showsNamespace = model.selectedType?.namespaced ?? false
             let showsUsage = model.selectedType?.hasMetrics ?? false
             let showsPercents = model.selectedType?.isPod ?? false
+            let showsWide = model.selectedType?.isPod ?? false
 
             Table(rows, selection: $model.selectedResourceID, sortOrder: $sortOrder) {
                 TableColumn("Name", value: \.name) { Text($0.name).fontWeight(.medium) }
@@ -129,6 +130,17 @@ struct ResourceListView: View {
                     TableColumn("Mem/lim", value: \.memPctLim) { PercentCell($0.memPctLim) }
                         .width(min: 64, ideal: 72)
                 }
+                // kubectl -o wide extras (pods): node placement and pod IP.
+                if showsWide {
+                    TableColumn("Node", value: \.node) {
+                        Text($0.node).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    }
+                    .width(min: 90, ideal: 140)
+                    TableColumn("IP", value: \.podIP) {
+                        Text($0.podIP).foregroundStyle(.secondary).monospacedDigit()
+                    }
+                    .width(min: 90, ideal: 120)
+                }
                 TableColumn("Age", value: \.sortCreated) {
                     Text($0.age).foregroundStyle(.secondary).monospacedDigit()
                 }
@@ -156,6 +168,10 @@ struct ResourceRow: Identifiable {
     var sortNamespace: String { object.sortNamespace }
     var sortCreated: Date { object.sortCreated }
     var namespaceText: String { object.namespace ?? "—" }
+
+    // `kubectl -o wide` pod columns.
+    var node: String { object.nodeName ?? "—" }
+    var podIP: String { object.podIP ?? "—" }
 
     var cpuMilli: Int { usage?.cpuMillicores ?? -1 }
     var memBytes: Int64 { usage?.memoryBytes ?? -1 }

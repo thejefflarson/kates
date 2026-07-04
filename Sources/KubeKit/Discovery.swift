@@ -150,6 +150,11 @@ public struct GenericObject: Identifiable, Sendable {
         (raw.properties["spec"] as? [String: any Sendable])?["nodeName"] as? String
     }
 
+    /// `status.podIP` (pods) — the `kubectl -o wide` IP column.
+    public var podIP: String? {
+        (raw.properties["status"] as? [String: any Sendable])?["podIP"] as? String
+    }
+
     /// `spec.replicas` (deployments/statefulsets), if present.
     public var specReplicas: Int? {
         guard let spec = raw.properties["spec"] as? [String: any Sendable] else { return nil }
