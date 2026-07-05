@@ -165,6 +165,10 @@ final class AppModel {
         selectedResourceID = nil
         detailYAML = ""
         listError = nil
+        // Drop the previous type's rows immediately so they don't render under
+        // the new type's columns while the fresh list loads.
+        objects = []
+        usage = [:]
         Task { await refresh() }
     }
 
@@ -173,16 +177,24 @@ final class AppModel {
         selectedResourceID = nil
         detailYAML = ""
         listError = nil
+        objects = []
+        usage = [:]
         Task { await refresh() }
     }
 
     func refresh(silent: Bool = false) async {
         guard let service, let type = selectedType else { return }
+        // Capture what we're loading; a slow list must not clobber the table if
+        // the user switched type/namespace (or an overlapping poll) meanwhile —
+        // that race is what made pods/nodes flip back and forth.
+        let requestedType = type.id
+        let requestedNamespace = namespaceFilter
         if !silent { isLoading = true }
         defer { if !silent { isLoading = false } }
 
         do {
             let loaded = try await service.listObjects(of: type, namespace: namespaceFilter)
+            guard selectedTypeID == requestedType, namespaceFilter == requestedNamespace else { return }
             self.objects = loaded
             self.listError = nil
             if type.hasMetrics {

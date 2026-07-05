@@ -274,15 +274,17 @@ struct DetailView: View {
                                 if !c.reason.isEmpty {
                                     Text(c.reason).font(.caption).foregroundStyle(.secondary)
                                 }
+                                Spacer(minLength: 0)
                             }
                             if !c.message.isEmpty {
                                 Text(c.message).font(.caption).foregroundStyle(.secondary)
                                     .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 4)
             } label: { Text("Conditions (\(conditions.count))").font(.headline) }
         }

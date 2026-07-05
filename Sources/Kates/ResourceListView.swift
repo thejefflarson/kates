@@ -51,9 +51,10 @@ struct ResourceListView: View {
                 }
             }
         }
-        // Switching type/selection should snap, not animate the table growing.
-        .animation(nil, value: model.selectedResourceID)
-        .animation(nil, value: model.selectedTypeID)
+        // This is a data view — never animate. SwiftUI otherwise animates the
+        // row reorder on sort (which read as ~1s of lag), row insert/remove on
+        // filter, and the table growing on type/selection change. Snap instead.
+        .transaction { $0.animation = nil }
         .searchable(text: $filterText, placement: .automatic, prompt: "Filter by name")
         .navigationTitle(model.selectedType?.kind ?? "Resources")
         .navigationSubtitle(subtitle)
@@ -85,6 +86,9 @@ struct ResourceListView: View {
             } actions: {
                 Button("Retry") { Task { await model.refresh() } }
             }
+        } else if model.objects.isEmpty && model.isLoading {
+            // Type/namespace switch in flight — spinner beats a "No X" flash.
+            ProgressView().controlSize(.large).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if model.objects.isEmpty {
             ContentUnavailableView("No \(model.selectedType?.displayName ?? "resources")",
                                    systemImage: "tray",
