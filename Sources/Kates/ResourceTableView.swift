@@ -41,16 +41,29 @@ private func columnFrames(_ columns: [RowColumn], width: CGFloat) -> [(col: RowC
     return out
 }
 
-private func cellFont(mono: Bool, bold: Bool, size: CGFloat = NSFont.systemFontSize) -> NSFont {
-    let weight: NSFont.Weight = bold ? .medium : .regular
-    return mono ? .monospacedDigitSystemFont(ofSize: size, weight: weight)
-                : .systemFont(ofSize: size, weight: weight)
+// Cache fonts and the paragraph style once instead of rebuilding them for every
+// cell on every redraw (the draw loop runs ~columns×visibleRows times).
+private let sz = NSFont.systemFontSize
+private let fontRegular = NSFont.systemFont(ofSize: sz)
+private let fontMedium = NSFont.systemFont(ofSize: sz, weight: .medium)
+private let fontMono = NSFont.monospacedDigitSystemFont(ofSize: sz, weight: .regular)
+private let fontMonoMedium = NSFont.monospacedDigitSystemFont(ofSize: sz, weight: .medium)
+private let headerFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
+private let truncatingParagraph: NSParagraphStyle = {
+    let p = NSMutableParagraphStyle(); p.lineBreakMode = .byTruncatingTail; return p
+}()
+
+private func cellFont(mono: Bool, bold: Bool) -> NSFont {
+    switch (mono, bold) {
+    case (true, true): return fontMonoMedium
+    case (true, false): return fontMono
+    case (false, true): return fontMedium
+    case (false, false): return fontRegular
+    }
 }
 
 private func drawText(_ s: String, in rect: NSRect, font: NSFont, color: NSColor) {
-    let para = NSMutableParagraphStyle()
-    para.lineBreakMode = .byTruncatingTail
-    let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: para]
+    let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: truncatingParagraph]
     let textH = font.ascender - font.descender
     let y = rect.minY + (rect.height - textH) / 2
     (s as NSString).draw(in: NSRect(x: rect.minX, y: y, width: rect.width, height: textH), withAttributes: attrs)
@@ -200,7 +213,7 @@ struct ResourceTableView: NSViewRepresentable {
         override func draw(_ dirtyRect: NSRect) {
             NSColor.windowBackgroundColor.setFill()
             bounds.fill()
-            let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+            let font = headerFont
             for (col, x, w) in columnFrames(columns, width: bounds.width) {
                 var title = col.title
                 if col.id == sortColumn { title += ascending ? "  ▲" : "  ▼" }
