@@ -254,10 +254,28 @@ struct ResourceTableView: NSViewRepresentable {
         }
 
         override func mouseDown(with event: NSEvent) {
+            window?.makeFirstResponder(self)   // take key focus for arrow nav
             let p = convert(event.locationInWindow, from: nil)
             let i = Int(p.y / rowHeight)
             guard i >= 0, i < rows.count else { return }
             container?.coordinator?.selectRow(id: rows[i].id)
+        }
+
+        // Arrow-key row navigation.
+        override var acceptsFirstResponder: Bool { true }
+
+        override func keyDown(with event: NSEvent) {
+            guard !rows.isEmpty else { return super.keyDown(with: event) }
+            let current = rows.firstIndex { $0.id == selectedID }
+            let next: Int
+            switch event.keyCode {
+            case 126: next = (current ?? 0) - 1        // up arrow
+            case 125: next = (current ?? -1) + 1       // down arrow
+            default: return super.keyDown(with: event)
+            }
+            let clamped = max(0, min(rows.count - 1, next))
+            container?.coordinator?.selectRow(id: rows[clamped].id)
+            scrollToVisible(NSRect(x: 0, y: CGFloat(clamped) * rowHeight, width: bounds.width, height: rowHeight))
         }
     }
 }
