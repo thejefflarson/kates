@@ -4,6 +4,21 @@ import KubeKit
 struct ResourceListView: View {
     @Environment(AppModel.self) private var model
     @State private var sortOrder = [KeyPathComparator(\ResourceRow.name)]
+    @State private var filterText = ""
+
+    /// Objects matching the filter (name/namespace, plus event fields for the
+    /// events view). Empty filter = everything.
+    private var filteredObjects: [GenericObject] {
+        let q = filterText.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return model.objects }
+        return model.objects.filter { o in
+            o.name.localizedCaseInsensitiveContains(q)
+                || (o.namespace?.localizedCaseInsensitiveContains(q) ?? false)
+                || o.eventReason.localizedCaseInsensitiveContains(q)
+                || o.eventObject.localizedCaseInsensitiveContains(q)
+                || o.eventMessage.localizedCaseInsensitiveContains(q)
+        }
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -36,9 +51,14 @@ struct ResourceListView: View {
                 }
             }
         }
+        // Switching type/selection should snap, not animate the table growing.
+        .animation(nil, value: model.selectedResourceID)
+        .animation(nil, value: model.selectedTypeID)
+        .searchable(text: $filterText, placement: .automatic, prompt: "Filter by name")
         .navigationTitle(model.selectedType?.kind ?? "Resources")
         .navigationSubtitle(subtitle)
         .onChange(of: model.selectedTypeID) {
+            filterText = ""   // a filter for one type rarely applies to the next
             // Events default to newest-first; everything else to name.
             sortOrder = (model.selectedType?.isEvent ?? false)
                 ? [KeyPathComparator(\ResourceRow.sortEventTime, order: .reverse)]
@@ -69,8 +89,10 @@ struct ResourceListView: View {
             ContentUnavailableView("No \(model.selectedType?.displayName ?? "resources")",
                                    systemImage: "tray",
                                    description: Text(emptyDescription))
+        } else if filteredObjects.isEmpty {
+            ContentUnavailableView.search(text: filterText)
         } else if model.selectedType?.isEvent ?? false {
-            let rows = model.objects
+            let rows = filteredObjects
                 .map { ResourceRow(object: $0, usage: nil) }
                 .sorted(using: sortOrder)
             Table(rows, selection: $model.selectedResourceID, sortOrder: $sortOrder) {
@@ -93,7 +115,7 @@ struct ResourceListView: View {
                 .width(min: 220, ideal: 420)
             }
         } else {
-            let rows = model.objects
+            let rows = filteredObjects
                 .map { ResourceRow(object: $0, usage: model.usage[$0.name]) }
                 .sorted(using: sortOrder)
             let showsNamespace = model.selectedType?.namespaced ?? false

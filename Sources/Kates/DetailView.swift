@@ -46,6 +46,7 @@ struct DetailView: View {
         .task(id: model.selectedResourceID) {
             model.updateDetail()
             replicasText = model.selectedObject?.specReplicas.map(String.init) ?? ""
+            if let obj = model.selectedObject { await model.loadEvents(for: obj) }
         }
     }
 
@@ -79,6 +80,7 @@ struct DetailView: View {
             VStack(alignment: .leading, spacing: 14) {
                 header(obj)
                 keyValues(metadata(for: obj, type: type))
+                labelsSection(obj)
 
                 if type?.isPod ?? false {
                     containersSection(obj)
@@ -92,6 +94,8 @@ struct DetailView: View {
                 if type?.isNode ?? false {
                     nodePodsSection(obj)
                 }
+                conditionsSection(obj)
+                eventsSection
                 yamlSection
             }
             .padding()
@@ -229,6 +233,85 @@ struct DetailView: View {
             .foregroundStyle(dim ? Color.secondary : Color.primary)
             .lineLimit(1).truncationMode(.middle)
             .frame(width: width, alignment: .leading)
+    }
+
+    // MARK: - Describe (labels, conditions, events)
+
+    @ViewBuilder
+    private func labelsSection(_ obj: GenericObject) -> some View {
+        let labels = obj.labels.sorted { $0.key < $1.key }
+        if !labels.isEmpty {
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(labels, id: \.key) { key, value in
+                        HStack(spacing: 6) {
+                            Text(key).foregroundStyle(.secondary)
+                            Text(value).textSelection(.enabled)
+                        }
+                        .font(.caption)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.top, 4)
+            } label: { Text("Labels (\(labels.count))").font(.headline) }
+        }
+    }
+
+    @ViewBuilder
+    private func conditionsSection(_ obj: GenericObject) -> some View {
+        let conditions = obj.conditions
+        if !conditions.isEmpty {
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(conditions) { c in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(c.status == "True" ? Color.green
+                                          : (c.status == "False" ? Color.red : Color.secondary))
+                                    .frame(width: 7, height: 7)
+                                Text(c.type).fontWeight(.medium)
+                                if !c.reason.isEmpty {
+                                    Text(c.reason).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            if !c.message.isEmpty {
+                                Text(c.message).font(.caption).foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                }
+                .padding(.top, 4)
+            } label: { Text("Conditions (\(conditions.count))").font(.headline) }
+        }
+    }
+
+    @ViewBuilder
+    private var eventsSection: some View {
+        let events = model.relatedEvents
+        if !events.isEmpty {
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(events) { ev in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 8) {
+                                StatusBadge(text: ev.eventType)
+                                Text(ev.eventReason).fontWeight(.medium)
+                                Spacer()
+                                Text(shortAge(since: ev.eventLastTime))
+                                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                            }
+                            Text(ev.eventMessage).font(.caption).foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .padding(.top, 4)
+            } label: { Text("Events (\(events.count))").font(.headline) }
+        }
     }
 
     @ViewBuilder

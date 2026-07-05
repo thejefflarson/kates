@@ -209,7 +209,33 @@ public struct GenericObject: Identifiable, Sendable {
         return nil
     }
 
+    // MARK: Describe (labels, conditions, identity)
+
+    public var uid: String? { raw.metadata?.uid }
+    public var labels: [String: String] { raw.metadata?.labels ?? [:] }
+
+    /// `status.conditions` — the heart of a `kubectl describe` for most types.
+    public var conditions: [ConditionInfo] {
+        guard let status = raw.properties["status"] as? [String: any Sendable],
+              let conds = status["conditions"] as? [any Sendable] else { return [] }
+        return conds.compactMap { item in
+            guard let c = item as? [String: any Sendable],
+                  let type = c["type"] as? String else { return nil }
+            return ConditionInfo(type: type,
+                                 status: c["status"] as? String ?? "",
+                                 reason: c["reason"] as? String ?? "",
+                                 message: c["message"] as? String ?? "")
+        }
+    }
+
     // MARK: Event fields (core/v1 Event and events.k8s.io/v1 Event)
+
+    /// The referenced object's UID, for matching events to the object they describe.
+    public var eventInvolvedUID: String? {
+        let obj = (raw.properties["involvedObject"] as? [String: any Sendable])
+            ?? (raw.properties["regarding"] as? [String: any Sendable])
+        return obj?["uid"] as? String
+    }
 
     public var eventMessage: String {
         (raw.properties["message"] as? String) ?? (raw.properties["note"] as? String) ?? ""
@@ -273,4 +299,14 @@ public struct ContainerStatusInfo: Sendable, Identifiable, Hashable {
     public let state: String     // Running / Waiting(reason) / Terminated(reason)
 
     public var id: String { name }
+}
+
+/// One `status.conditions` entry, for the describe view.
+public struct ConditionInfo: Sendable, Identifiable, Hashable {
+    public let type: String
+    public let status: String
+    public let reason: String
+    public let message: String
+
+    public var id: String { type }
 }

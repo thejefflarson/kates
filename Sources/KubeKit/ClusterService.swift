@@ -84,6 +84,18 @@ public final class ClusterService: Sendable {
         return pods.filter { $0.nodeName == node }
     }
 
+    /// Core/v1 events referencing a specific object — the "Events" section of a
+    /// `kubectl describe`. Cluster-scoped objects (e.g. nodes) record events in
+    /// the "default" namespace, so callers pass that when the object has none.
+    public func eventsForObject(namespace: String, uid: String) async throws -> [GenericObject] {
+        let eventsType = APIResourceType(group: "", version: "v1", name: "events",
+                                         kind: "Event", namespaced: true)
+        let events = try await listObjects(of: eventsType, namespace: namespace)
+        return events
+            .filter { $0.eventInvolvedUID == uid }
+            .sorted { ($0.eventLastTime ?? .distantPast) > ($1.eventLastTime ?? .distantPast) }
+    }
+
     static func splitGroupVersion(_ gv: String) -> (group: String, version: String) {
         let parts = gv.split(separator: "/", maxSplits: 1)
         return parts.count == 2 ? (String(parts[0]), String(parts[1])) : ("", gv)

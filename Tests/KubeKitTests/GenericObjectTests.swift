@@ -211,6 +211,45 @@ final class GenericObjectTests: XCTestCase {
         XCTAssertNil(none.specReplicas)
     }
 
+    // MARK: Describe (labels, conditions, event matching)
+
+    func testLabelsAndConditions() {
+        var m = objectMeta(name: "web", namespace: "default", uid: "uid-1")
+        m.labels = ["app": "web", "tier": "frontend"]
+        let obj = object(kind: "Pod", meta: m, [
+            "status": dict([
+                "conditions": arr([
+                    dict(["type": "Ready", "status": "True"]),
+                    dict(["type": "ContainersReady", "status": "False",
+                          "reason": "ContainersNotReady", "message": "containers not ready"]),
+                    dict(["foo": "bar"]),   // no type → skipped
+                ]),
+            ]),
+        ])
+        XCTAssertEqual(obj.uid, "uid-1")
+        XCTAssertEqual(obj.labels, ["app": "web", "tier": "frontend"])
+
+        let conds = obj.conditions
+        XCTAssertEqual(conds.count, 2)
+        XCTAssertEqual(conds[0].type, "Ready")
+        XCTAssertEqual(conds[0].status, "True")
+        XCTAssertEqual(conds[1].reason, "ContainersNotReady")
+        XCTAssertEqual(conds[1].message, "containers not ready")
+    }
+
+    func testEventInvolvedUIDForMatching() {
+        let core = object(kind: "Event", meta: objectMeta(name: "e1"),
+                          ["involvedObject": dict(["kind": "Pod", "name": "web", "uid": "uid-1"])])
+        XCTAssertEqual(core.eventInvolvedUID, "uid-1")
+
+        let k8sio = object(kind: "Event", meta: objectMeta(name: "e2"),
+                           ["regarding": dict(["kind": "Pod", "name": "api", "uid": "uid-2"])])
+        XCTAssertEqual(k8sio.eventInvolvedUID, "uid-2")
+
+        let none = object(kind: "Pod", meta: objectMeta(name: "web"), [:])
+        XCTAssertNil(none.eventInvolvedUID)
+    }
+
     // MARK: Events — core/v1 shape
 
     func testCoreV1EventFields() {

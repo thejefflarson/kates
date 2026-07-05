@@ -39,6 +39,7 @@ final class AppModel {
     private(set) var usage: [String: PodUsage] = [:]   // CPU/mem keyed by pod or node name
     private(set) var nodePods: [GenericObject] = []     // pods on the selected node
     private(set) var nodePodUsage: [String: PodUsage] = [:]
+    private(set) var relatedEvents: [GenericObject] = [] // events for the selected object (describe)
 
     // UI state
     var selectedResourceID: String?
@@ -213,6 +214,15 @@ final class AppModel {
 
     func updateDetail() {
         detailYAML = selectedObject?.renderYAML() ?? ""
+    }
+
+    /// Loads events referencing the selected object (describe view). Cleared
+    /// first so a slow fetch never shows the previous object's events.
+    func loadEvents(for obj: GenericObject) async {
+        relatedEvents = []
+        guard let service, let uid = obj.uid else { return }
+        relatedEvents = (try? await service.eventsForObject(
+            namespace: obj.namespace ?? "default", uid: uid)) ?? []
     }
 
     func loadNodePods(_ node: String) async {
