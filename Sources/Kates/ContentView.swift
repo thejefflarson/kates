@@ -8,7 +8,7 @@ struct ContentView: View {
         @Bindable var model = model
 
         NavigationSplitView {
-            sidebar
+            SidebarView()
                 .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 360)
                 .navigationTitle("Resources")
         } detail: {
@@ -55,45 +55,6 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder
-    private var sidebar: some View {
-        @Bindable var model = model
-
-        if model.service == nil {
-            List { Text("Not connected").foregroundStyle(.secondary) }
-        } else {
-            List(selection: Binding(
-                get: { model.selectedTypeID },
-                set: { model.selectType($0) }
-            )) {
-                ForEach(model.groupedTypes, id: \.groupVersion) { section in
-                    Section(section.groupVersion) {
-                        ForEach(section.types) { type in
-                            Label(type.displayName, systemImage: symbol(for: type))
-                                .tag(type.id)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func symbol(for type: APIResourceType) -> String {
-        switch type.name {
-        case "pods": return "shippingbox"
-        case "deployments", "replicasets": return "square.stack.3d.up"
-        case "statefulsets", "daemonsets": return "square.stack.3d.down.right"
-        case "services": return "network"
-        case "configmaps": return "doc.plaintext"
-        case "secrets": return "key"
-        case "namespaces": return "square.grid.3x3"
-        case "nodes": return "cpu"
-        case "ingresses": return "arrow.triangle.branch"
-        case "persistentvolumeclaims", "persistentvolumes": return "externaldrive"
-        default: return type.namespaced ? "cube" : "globe"
-        }
-    }
-
     private var contextPicker: some View {
         @Bindable var model = model
         return Picker("Context", selection: Binding(
@@ -121,5 +82,51 @@ struct ContentView: View {
         .fixedSize()
         .help("Namespace")
         .disabled(model.namespaces.isEmpty || !(model.selectedType?.namespaced ?? true))
+    }
+}
+
+/// The resource-type sidebar, isolated into its own view. It reads only the
+/// type list and its selection, so SwiftUI's observation tracking keeps it from
+/// re-rendering (and re-diffing this whole `List` through AppKit's slow
+/// outline-table coordinator) when unrelated model state changes — the object
+/// list, metrics, the 2s refresh, or the selected row. That re-diff was the
+/// dominant cost in profiling.
+struct SidebarView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.service == nil {
+            List { Text("Not connected").foregroundStyle(.secondary) }
+        } else {
+            List(selection: Binding(
+                get: { model.selectedTypeID },
+                set: { model.selectType($0) }
+            )) {
+                ForEach(model.groupedTypes, id: \.groupVersion) { section in
+                    Section(section.groupVersion) {
+                        ForEach(section.types) { type in
+                            Label(type.displayName, systemImage: Self.symbol(for: type))
+                                .tag(type.id)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static func symbol(for type: APIResourceType) -> String {
+        switch type.name {
+        case "pods": return "shippingbox"
+        case "deployments", "replicasets": return "square.stack.3d.up"
+        case "statefulsets", "daemonsets": return "square.stack.3d.down.right"
+        case "services": return "network"
+        case "configmaps": return "doc.plaintext"
+        case "secrets": return "key"
+        case "namespaces": return "square.grid.3x3"
+        case "nodes": return "cpu"
+        case "ingresses": return "arrow.triangle.branch"
+        case "persistentvolumeclaims", "persistentvolumes": return "externaldrive"
+        default: return type.namespaced ? "cube" : "globe"
+        }
     }
 }
