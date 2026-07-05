@@ -3,7 +3,6 @@ import KubeKit
 
 struct ResourceListView: View {
     @Environment(AppModel.self) private var model
-    @State private var sortOrder = [KeyPathComparator(\ResourceRow.name)]
     @State private var filterText = ""
 
     /// Objects matching the filter (name/namespace, plus event fields for the
@@ -60,10 +59,6 @@ struct ResourceListView: View {
         .navigationSubtitle(subtitle)
         .onChange(of: model.selectedTypeID) {
             filterText = ""   // a filter for one type rarely applies to the next
-            // Events default to newest-first; everything else to name.
-            sortOrder = (model.selectedType?.isEvent ?? false)
-                ? [KeyPathComparator(\ResourceRow.sortEventTime, order: .reverse)]
-                : [KeyPathComparator(\ResourceRow.name)]
         }
     }
 
@@ -96,121 +91,105 @@ struct ResourceListView: View {
         } else if filteredObjects.isEmpty {
             ContentUnavailableView.search(text: filterText)
         } else if model.selectedType?.isEvent ?? false {
-            let rows = filteredObjects
-                .map { ResourceRow(object: $0, usage: nil) }
-                .sorted(using: sortOrder)
-            Table(rows, selection: $model.selectedResourceID, sortOrder: $sortOrder) {
-                TableColumn("Last Seen", value: \.sortEventTime) {
-                    Text($0.lastSeen).foregroundStyle(.secondary).monospacedDigit()
-                }
-                .width(min: 80, ideal: 110)
-                TableColumn("Type", value: \.eventType) { StatusBadge(text: $0.eventType) }
-                    .width(min: 70, ideal: 84)
-                TableColumn("Reason", value: \.eventReason) { Text($0.eventReason) }
-                    .width(min: 120, ideal: 170)
-                TableColumn("Object", value: \.eventObject) {
-                    Text($0.eventObject).foregroundStyle(.secondary)
-                        .lineLimit(1).truncationMode(.middle)
-                }
-                .width(min: 140, ideal: 200)
-                TableColumn("Message", value: \.eventMessage) {
-                    Text($0.eventMessage).lineLimit(2).textSelection(.enabled)
-                }
-                .width(min: 220, ideal: 420)
-            }
+            let rows = filteredObjects.map { ResourceRow(object: $0, usage: nil) }
+            ResourceTableView(rows: rows, columns: Self.eventColumns,
+                              selection: $model.selectedResourceID, defaultDescending: true)
         } else {
-            let rows = filteredObjects
-                .map { ResourceRow(object: $0, usage: model.usage[$0.name]) }
-                .sorted(using: sortOrder)
-            let showsNamespace = model.selectedType?.namespaced ?? false
-            let showsUsage = model.selectedType?.hasMetrics ?? false
-            let showsPercents = model.selectedType?.isPod ?? false
-            let showsWide = model.selectedType?.isPod ?? false
-            let isNode = model.selectedType?.isNode ?? false
-            let isService = model.selectedType?.isService ?? false
-
-            Table(rows, selection: $model.selectedResourceID, sortOrder: $sortOrder) {
-                TableColumn("Name", value: \.name) { Text($0.name).fontWeight(.medium) }
-                    .width(min: 160, ideal: 240)
-                if showsNamespace {
-                    TableColumn("Namespace", value: \.sortNamespace) {
-                        Text($0.namespaceText).foregroundStyle(.secondary)
-                    }
-                    .width(min: 90, ideal: 120)
-                }
-                if showsUsage {
-                    TableColumn("CPU", value: \.cpuMilli) {
-                        Text($0.cpuText).foregroundStyle(.secondary).monospacedDigit()
-                    }
-                    .width(min: 56, ideal: 64)
-                    TableColumn("Memory", value: \.memBytes) {
-                        Text($0.memText).foregroundStyle(.secondary).monospacedDigit()
-                    }
-                    .width(min: 64, ideal: 76)
-                }
-                if showsPercents {
-                    TableColumn("CPU/req", value: \.cpuPctReq) { PercentCell($0.cpuPctReq) }
-                        .width(min: 64, ideal: 72)
-                    TableColumn("CPU/lim", value: \.cpuPctLim) { PercentCell($0.cpuPctLim) }
-                        .width(min: 64, ideal: 72)
-                    TableColumn("Mem/req", value: \.memPctReq) { PercentCell($0.memPctReq) }
-                        .width(min: 64, ideal: 72)
-                    TableColumn("Mem/lim", value: \.memPctLim) { PercentCell($0.memPctLim) }
-                        .width(min: 64, ideal: 72)
-                }
-                // kubectl -o wide extras (pods): node placement and pod IP.
-                if showsWide {
-                    TableColumn("Node", value: \.node) {
-                        Text($0.node).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                    }
-                    .width(min: 90, ideal: 140)
-                    TableColumn("IP", value: \.podIP) {
-                        Text($0.podIP).foregroundStyle(.secondary).monospacedDigit()
-                    }
-                    .width(min: 90, ideal: 120)
-                }
-                // kubectl -o wide extras (nodes).
-                if isNode {
-                    TableColumn("Internal-IP", value: \.nodeInternalIP) {
-                        Text($0.nodeInternalIP).foregroundStyle(.secondary).monospacedDigit()
-                    }
-                    .width(min: 90, ideal: 120)
-                    TableColumn("OS", value: \.nodeOSImage) {
-                        Text($0.nodeOSImage).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                    }
-                    .width(min: 100, ideal: 160)
-                    TableColumn("Kernel", value: \.nodeKernelVersion) {
-                        Text($0.nodeKernelVersion).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                    }
-                    .width(min: 90, ideal: 130)
-                    TableColumn("Runtime", value: \.nodeContainerRuntime) {
-                        Text($0.nodeContainerRuntime).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                    }
-                    .width(min: 90, ideal: 140)
-                }
-                // kubectl -o wide extras (services).
-                if isService {
-                    TableColumn("Type", value: \.serviceType) {
-                        Text($0.serviceType).foregroundStyle(.secondary)
-                    }
-                    .width(min: 80, ideal: 100)
-                    TableColumn("Cluster-IP", value: \.serviceClusterIP) {
-                        Text($0.serviceClusterIP).foregroundStyle(.secondary).monospacedDigit()
-                    }
-                    .width(min: 90, ideal: 120)
-                    TableColumn("Ports", value: \.servicePorts) {
-                        Text($0.servicePorts).foregroundStyle(.secondary)
-                            .lineLimit(1).truncationMode(.middle)
-                    }
-                    .width(min: 90, ideal: 150)
-                }
-                TableColumn("Age", value: \.sortCreated) {
-                    Text($0.age).foregroundStyle(.secondary).monospacedDigit()
-                }
-                .width(min: 48, ideal: 56)
-            }
+            let rows = filteredObjects.map { ResourceRow(object: $0, usage: model.usage[$0.name]) }
+            ResourceTableView(rows: rows, columns: genericColumns(for: model.selectedType),
+                              selection: $model.selectedResourceID)
         }
     }
+
+    // MARK: - Column definitions (native table)
+
+    private static let secondary = NSColor.secondaryLabelColor
+
+    private func genericColumns(for type: APIResourceType?) -> [RowColumn] {
+        var cols: [RowColumn] = [
+            RowColumn(id: "name", title: "Name", width: 240, bold: true,
+                      text: { $0.name }, color: { _ in .labelColor },
+                      less: { $0.name.localizedStandardCompare($1.name) == .orderedAscending }),
+        ]
+        if type?.namespaced ?? false {
+            cols.append(RowColumn(id: "namespace", title: "Namespace", width: 120,
+                text: { $0.namespaceText },
+                less: { $0.sortNamespace.localizedStandardCompare($1.sortNamespace) == .orderedAscending }))
+        }
+        if type?.hasMetrics ?? false {
+            cols.append(RowColumn(id: "cpu", title: "CPU", width: 64, mono: true,
+                text: { $0.cpuText }, less: { $0.cpuMilli < $1.cpuMilli }))
+            cols.append(RowColumn(id: "memory", title: "Memory", width: 76, mono: true,
+                text: { $0.memText }, less: { $0.memBytes < $1.memBytes }))
+        }
+        if type?.isPod ?? false {
+            cols.append(pctColumn(id: "cpureq", title: "CPU/req", value: { $0.cpuPctReq }))
+            cols.append(pctColumn(id: "cpulim", title: "CPU/lim", value: { $0.cpuPctLim }))
+            cols.append(pctColumn(id: "memreq", title: "Mem/req", value: { $0.memPctReq }))
+            cols.append(pctColumn(id: "memlim", title: "Mem/lim", value: { $0.memPctLim }))
+            cols.append(RowColumn(id: "node", title: "Node", width: 140,
+                text: { $0.node },
+                less: { $0.node.localizedStandardCompare($1.node) == .orderedAscending }))
+            cols.append(RowColumn(id: "ip", title: "IP", width: 120, mono: true,
+                text: { $0.podIP },
+                less: { $0.podIP.localizedStandardCompare($1.podIP) == .orderedAscending }))
+        }
+        if type?.isNode ?? false {
+            cols.append(RowColumn(id: "internalip", title: "Internal-IP", width: 120, mono: true,
+                text: { $0.nodeInternalIP },
+                less: { $0.nodeInternalIP.localizedStandardCompare($1.nodeInternalIP) == .orderedAscending }))
+            cols.append(RowColumn(id: "os", title: "OS", width: 160,
+                text: { $0.nodeOSImage },
+                less: { $0.nodeOSImage.localizedStandardCompare($1.nodeOSImage) == .orderedAscending }))
+            cols.append(RowColumn(id: "kernel", title: "Kernel", width: 130,
+                text: { $0.nodeKernelVersion },
+                less: { $0.nodeKernelVersion.localizedStandardCompare($1.nodeKernelVersion) == .orderedAscending }))
+            cols.append(RowColumn(id: "runtime", title: "Runtime", width: 140,
+                text: { $0.nodeContainerRuntime },
+                less: { $0.nodeContainerRuntime.localizedStandardCompare($1.nodeContainerRuntime) == .orderedAscending }))
+        }
+        if type?.isService ?? false {
+            cols.append(RowColumn(id: "svctype", title: "Type", width: 100,
+                text: { $0.serviceType },
+                less: { $0.serviceType.localizedStandardCompare($1.serviceType) == .orderedAscending }))
+            cols.append(RowColumn(id: "clusterip", title: "Cluster-IP", width: 120, mono: true,
+                text: { $0.serviceClusterIP },
+                less: { $0.serviceClusterIP.localizedStandardCompare($1.serviceClusterIP) == .orderedAscending }))
+            cols.append(RowColumn(id: "ports", title: "Ports", width: 150,
+                text: { $0.servicePorts },
+                less: { $0.servicePorts.localizedStandardCompare($1.servicePorts) == .orderedAscending }))
+        }
+        cols.append(RowColumn(id: "age", title: "Age", width: 60, mono: true,
+            text: { $0.age }, less: { $0.sortCreated < $1.sortCreated }))
+        return cols
+    }
+
+    private func pctColumn(id: String, title: String, value: @escaping (ResourceRow) -> Double) -> RowColumn {
+        RowColumn(id: id, title: title, width: 72, mono: true,
+                  text: { value($0) < 0 ? "—" : "\(Int(value($0).rounded()))%" },
+                  color: { value($0) > 100 ? .systemRed : Self.secondary },
+                  less: { value($0) < value($1) })
+    }
+
+    private static let eventColumns: [RowColumn] = [
+        RowColumn(id: "lastseen", title: "Last Seen", width: 110, mono: true,
+                  text: { $0.lastSeen }, less: { $0.sortEventTime < $1.sortEventTime }),
+        RowColumn(id: "type", title: "Type", width: 84,
+                  text: { $0.eventType },
+                  color: { switch $0.eventType {
+                      case "Warning": return .systemOrange
+                      case "Normal": return .systemGreen
+                      default: return secondary } },
+                  less: { $0.eventType.localizedStandardCompare($1.eventType) == .orderedAscending }),
+        RowColumn(id: "reason", title: "Reason", width: 170, text: { $0.eventReason },
+                  color: { _ in .labelColor },
+                  less: { $0.eventReason.localizedStandardCompare($1.eventReason) == .orderedAscending }),
+        RowColumn(id: "eobject", title: "Object", width: 200, text: { $0.eventObject },
+                  less: { $0.eventObject.localizedStandardCompare($1.eventObject) == .orderedAscending }),
+        RowColumn(id: "message", title: "Message", width: 420, text: { $0.eventMessage },
+                  color: { _ in .labelColor },
+                  less: { $0.eventMessage.localizedStandardCompare($1.eventMessage) == .orderedAscending }),
+    ]
 
     private var emptyDescription: String {
         guard model.selectedType?.namespaced ?? false else { return "No objects of this type." }
@@ -306,21 +285,5 @@ struct ResourceRow: Identifiable, Equatable, Hashable {
     private static func percent(_ used: Int64, _ base: Int64, have: Bool) -> Double {
         guard have, base > 0 else { return -1 }
         return Double(used) / Double(base) * 100
-    }
-}
-
-/// Renders a percentage (or "—" when unset); >100% is highlighted red.
-struct PercentCell: View {
-    let value: Double
-    init(_ value: Double) { self.value = value }
-
-    var body: some View {
-        if value < 0 {
-            Text("—").foregroundStyle(.secondary)
-        } else {
-            Text("\(Int(value.rounded()))%")
-                .monospacedDigit()
-                .foregroundStyle(value > 100 ? .red : .secondary)
-        }
     }
 }
