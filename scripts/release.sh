@@ -81,7 +81,15 @@ WORK=$(mktemp -d /tmp/kates-release.XXXXXX)
 trap 'rm -rf "$WORK"' EXIT
 ZIP="$WORK/Kates-$VERSION.zip"
 echo "→ zipping app"
-ditto -c -k --keepParent "$APP" "$ZIP"
+# --noextattr/--norsrc: exclude extended attributes (notably the kernel-applied
+# com.apple.provenance xattr). Otherwise ditto stores them as AppleDouble "._"
+# entries which, when the download is extracted by `unzip` (or some Finder
+# paths), land as literal ._ files inside the bundle and break the code-signature
+# seal ("unsealed contents present in an embedded framework") → Gatekeeper
+# rejects the app. The signature and stapled notarization ticket are files, not
+# xattrs, so dropping xattrs is safe.
+ZIP_FLAGS=(-c -k --keepParent --noextattr --norsrc)
+ditto "${ZIP_FLAGS[@]}" "$APP" "$ZIP"
 
 # ── Notarize (optional) ───────────────────────────────────────────────────────
 
@@ -91,7 +99,7 @@ if [[ "$IDENTITY" != "-" && -n "${NOTARY_PROFILE:-}" ]]; then
     echo "→ stapling"
     xcrun stapler staple "$APP"
     rm -f "$ZIP"
-    ditto -c -k --keepParent "$APP" "$ZIP"   # re-zip with the stapled ticket
+    ditto "${ZIP_FLAGS[@]}" "$APP" "$ZIP"   # re-zip with the stapled ticket
 else
     echo "→ skipping notarization (set NOTARY_PROFILE and use a Developer ID to enable)"
 fi
