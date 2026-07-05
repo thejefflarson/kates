@@ -29,7 +29,6 @@ struct DetailView: View {
     @State private var replicasText = ""
     @State private var nodePodSort: NodePodSort = .name
     @State private var nodePodSortAsc = true
-    @State private var showYAML = false
 
     enum NodePodSort { case name, namespace, cpu, mem, age }
 
@@ -81,16 +80,21 @@ struct DetailView: View {
             VStack(alignment: .leading, spacing: 14) {
                 header(obj)
                 keyValues(metadata(for: obj, type: type))
-                labelsSection(obj)
 
+                // Actions sit just below the top block, above the sections.
                 if type?.isPod ?? false {
-                    containersSection(obj)
                     Button(role: .destructive) { confirmDelete = true } label: {
                         Label("Delete Pod", systemImage: "trash")
                     }
                 }
                 if type?.isDeployment ?? false {
                     scaleControl(obj)
+                }
+
+                // Collapsible sections.
+                labelsSection(obj)
+                if type?.isPod ?? false {
+                    containersSection(obj)
                 }
                 if type?.isNode ?? false {
                     nodePodsSection(obj)
@@ -120,7 +124,7 @@ struct DetailView: View {
     private func containersSection(_ obj: GenericObject) -> some View {
         let containers = obj.containers
         if !containers.isEmpty {
-            DisclosureGroup {
+            Collapsible("Containers (\(containers.count))") {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(containers) { c in
                         HStack(spacing: 8) {
@@ -137,15 +141,13 @@ struct DetailView: View {
                     }
                 }
                 .padding(.top, 4)
-            } label: {
-                Text("Containers (\(containers.count))").font(.headline)
             }
         }
     }
 
     @ViewBuilder
     private func nodePodsSection(_ obj: GenericObject) -> some View {
-        DisclosureGroup {
+        Collapsible("Pods (\(model.nodePods.count))") {
             VStack(spacing: 0) {
                 nodePodHeader
                 Divider()
@@ -162,8 +164,6 @@ struct DetailView: View {
                 }
             }
             .padding(.top, 4)
-        } label: {
-            Text("Pods (\(model.nodePods.count))").font(.headline)
         }
         .task(id: obj.id) { await model.loadNodePods(obj.name) }
     }
@@ -242,7 +242,7 @@ struct DetailView: View {
     private func labelsSection(_ obj: GenericObject) -> some View {
         let labels = obj.labels.sorted { $0.key < $1.key }
         if !labels.isEmpty {
-            DisclosureGroup {
+            Collapsible("Labels (\(labels.count))") {
                 VStack(alignment: .leading, spacing: 3) {
                     ForEach(labels, id: \.key) { key, value in
                         HStack(spacing: 6) {
@@ -254,7 +254,7 @@ struct DetailView: View {
                     }
                 }
                 .padding(.top, 4)
-            } label: { Text("Labels (\(labels.count))").font(.headline) }
+            }
         }
     }
 
@@ -262,7 +262,7 @@ struct DetailView: View {
     private func conditionsSection(_ obj: GenericObject) -> some View {
         let conditions = obj.conditions
         if !conditions.isEmpty {
-            DisclosureGroup {
+            Collapsible("Conditions (\(conditions.count))") {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(conditions) { c in
                         VStack(alignment: .leading, spacing: 2) {
@@ -287,7 +287,7 @@ struct DetailView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 4)
-            } label: { Text("Conditions (\(conditions.count))").font(.headline) }
+            }
         }
     }
 
@@ -295,7 +295,7 @@ struct DetailView: View {
     private var eventsSection: some View {
         let events = model.relatedEvents
         if !events.isEmpty {
-            DisclosureGroup {
+            Collapsible("Events (\(events.count))") {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(events) { ev in
                         VStack(alignment: .leading, spacing: 2) {
@@ -313,7 +313,7 @@ struct DetailView: View {
                     }
                 }
                 .padding(.top, 4)
-            } label: { Text("Events (\(events.count))").font(.headline) }
+            }
         }
     }
 
@@ -340,15 +340,20 @@ struct DetailView: View {
     // MARK: - Building blocks
 
     private func header(_ obj: GenericObject) -> some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             Image(systemName: "cube.box").font(.largeTitle).foregroundStyle(.tint)
-            VStack(alignment: .leading) {
+                .frame(height: titleBlockHeight)      // match the text block so centering is true
+            VStack(alignment: .leading, spacing: 1) {
                 Text(obj.name).font(.title3.weight(.semibold)).textSelection(.enabled)
                 Text(obj.kind).foregroundStyle(.secondary)
             }
             Spacer()
         }
     }
+
+    // Approx height of the two-line name/kind block, so the icon frame matches
+    // it and vertical centering lands the icon against the title, not above it.
+    private let titleBlockHeight: CGFloat = 40
 
     private func keyValues(_ pairs: [(String, String)]) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
@@ -364,10 +369,10 @@ struct DetailView: View {
     @ViewBuilder
     private var yamlSection: some View {
         if !model.detailYAML.isEmpty {
-            // Collapsed by default: DisclosureGroup doesn't lay out its content
-            // until expanded, so the (potentially large) YAML text isn't
-            // re-rendered on every table sort/refresh while a detail is open.
-            DisclosureGroup(isExpanded: $showYAML) {
+            // Collapsed by default: Collapsible doesn't build its content until
+            // expanded, so the (potentially large) YAML text isn't laid out
+            // while a detail is open.
+            Collapsible("YAML") {
                 ScrollView {
                     Text(model.detailYAML)
                         .font(.system(.caption, design: .monospaced))
@@ -382,7 +387,33 @@ struct DetailView: View {
                     }
                     .buttonStyle(.borderless).help("Copy YAML").padding(6)
                 }
-            } label: { Text("YAML").font(.headline) }
+            }
+        }
+    }
+}
+
+/// A DisclosureGroup whose entire header row toggles it — not just the chevron,
+/// which is a hard-to-hit target. Manages its own expansion state.
+private struct Collapsible<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: () -> Content
+    @State private var expanded = false
+
+    init(_ title: String, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.content = content
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            content()
+        } label: {
+            HStack(spacing: 4) {
+                Text(title).font(.headline)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { expanded.toggle() }
         }
     }
 }

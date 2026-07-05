@@ -23,7 +23,7 @@ struct RowColumn: Identifiable {
 }
 
 private let rowHeight: CGFloat = 22
-private let headerHeight: CGFloat = 24
+private let headerHeight: CGFloat = 26
 private let cellPadX: CGFloat = 8
 
 /// Column geometry shared by header and rows so they line up. The first column
@@ -65,9 +65,10 @@ private func cellFont(mono: Bool, bold: Bool) -> NSFont {
 
 private func drawText(_ s: String, in rect: NSRect, font: NSFont, color: NSColor) {
     let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: truncatingParagraph]
-    let textH = font.ascender - font.descender
-    let y = rect.minY + (rect.height - textH) / 2
-    (s as NSString).draw(in: NSRect(x: rect.minX, y: y, width: rect.width, height: textH), withAttributes: attrs)
+    // +2 slack so descenders (the "g" in "Age") aren't clipped by the draw rect.
+    let lineH = ceil(font.ascender - font.descender) + 2
+    let y = rect.minY + ((rect.height - lineH) / 2).rounded(.down)
+    (s as NSString).draw(in: NSRect(x: rect.minX, y: y, width: rect.width, height: lineH), withAttributes: attrs)
 }
 
 /// A table we draw ourselves — no cell views, no reuse, no Auto Layout. Sorting
@@ -170,7 +171,8 @@ struct ResourceTableView: NSViewRepresentable {
             rowsView.container = self
             scroll.documentView = rowsView
             scroll.hasVerticalScroller = true
-            scroll.drawsBackground = false
+            scroll.drawsBackground = true
+            scroll.backgroundColor = NSColor.alternatingContentBackgroundColors.first ?? .textBackgroundColor
             addSubview(header)
             addSubview(scroll)
         }
@@ -247,17 +249,15 @@ struct ResourceTableView: NSViewRepresentable {
             let first = max(0, Int(dirtyRect.minY / rowHeight))
             let last = min(rows.count, Int(ceil(dirtyRect.maxY / rowHeight)))
             guard first < last else { return }
+            let base = stripe.first ?? .textBackgroundColor
+            let alt = stripe.count > 1 ? stripe[1] : base
             for i in first..<last {
                 let y = CGFloat(i) * rowHeight
                 let row = rows[i]
                 let selected = row.id == selectedID
-                if selected {
-                    NSColor.selectedContentBackgroundColor.setFill()
-                    NSRect(x: 0, y: y, width: bounds.width, height: rowHeight).fill()
-                } else if i % 2 == 1, stripe.count > 1 {
-                    stripe[1].setFill()
-                    NSRect(x: 0, y: y, width: bounds.width, height: rowHeight).fill()
-                }
+                // Fill every row (all semantic colors, so light/dark both work).
+                (selected ? .selectedContentBackgroundColor : (i % 2 == 0 ? base : alt)).setFill()
+                NSRect(x: 0, y: y, width: bounds.width, height: rowHeight).fill()
                 for (col, x, w) in cols {
                     let color = selected ? NSColor.alternateSelectedControlTextColor : col.color(row)
                     drawText(col.text(row),
