@@ -239,12 +239,22 @@ public struct GenericObject: Identifiable, Sendable {
         return createdAt
     }
 
-    private static func parseRFC3339(_ s: String) -> Date? {
+    // Allocating an ISO8601DateFormatter is expensive (ICU setup); reuse two
+    // pre-configured instances instead of building one per parse. Accessed only
+    // from the main-actor UI path, so sharing is safe.
+    nonisolated(unsafe) private static let fractionalFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: s) { return d }
+        return f
+    }()
+    nonisolated(unsafe) private static let plainFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
-        return f.date(from: s)
+        return f
+    }()
+
+    private static func parseRFC3339(_ s: String) -> Date? {
+        fractionalFormatter.date(from: s) ?? plainFormatter.date(from: s)
     }
 
     public func renderYAML() -> String {

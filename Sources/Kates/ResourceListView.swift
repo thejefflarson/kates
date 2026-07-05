@@ -192,59 +192,94 @@ struct ResourceListView: View {
     }
 }
 
-/// A table row carrying both the object and its (optional) usage, so every
-/// column — including CPU/memory and request/limit percentages — is sortable.
-/// Missing values sort as -1 (and render as "—").
+/// A table row with every sortable/displayable value precomputed once at build
+/// time. Sorting compares O(n log n) times, so deriving these lazily from the
+/// unstructured object (re-parsing its dictionaries, and formatting dates) on
+/// each access made large tables slow to sort — here every field is a stored
+/// value the comparators read directly. Missing values sort as -1 / render "—".
 struct ResourceRow: Identifiable {
-    let object: GenericObject
-    let usage: PodUsage?
-
-    var id: String { object.id }
-    var name: String { object.name }
-    var age: String { object.age }
-    var sortNamespace: String { object.sortNamespace }
-    var sortCreated: Date { object.sortCreated }
-    var namespaceText: String { object.namespace ?? "—" }
+    let id: String
+    let name: String
+    let age: String
+    let sortNamespace: String
+    let sortCreated: Date
+    let namespaceText: String
 
     // `kubectl -o wide` pod columns.
-    var node: String { object.nodeName ?? "—" }
-    var podIP: String { object.podIP ?? "—" }
-
+    let node: String
+    let podIP: String
     // `kubectl -o wide` node columns.
-    var nodeInternalIP: String { object.nodeInternalIP ?? "—" }
-    var nodeOSImage: String { object.nodeOSImage ?? "—" }
-    var nodeKernelVersion: String { object.nodeKernelVersion ?? "—" }
-    var nodeContainerRuntime: String { object.nodeContainerRuntime ?? "—" }
-
+    let nodeInternalIP: String
+    let nodeOSImage: String
+    let nodeKernelVersion: String
+    let nodeContainerRuntime: String
     // `kubectl -o wide` service columns.
-    var serviceType: String { object.serviceType ?? "—" }
-    var serviceClusterIP: String { object.serviceClusterIP ?? "—" }
-    var servicePorts: String { object.servicePorts.isEmpty ? "—" : object.servicePorts }
+    let serviceType: String
+    let serviceClusterIP: String
+    let servicePorts: String
 
-    var cpuMilli: Int { usage?.cpuMillicores ?? -1 }
-    var memBytes: Int64 { usage?.memoryBytes ?? -1 }
-    var cpuText: String { usage?.cpuDisplay ?? "—" }
-    var memText: String { usage?.memoryDisplay ?? "—" }
-
-    var cpuPctReq: Double { percent(Int64(usage?.cpuMillicores ?? 0), Int64(object.cpuRequestMillicores), have: usage != nil) }
-    var cpuPctLim: Double { percent(Int64(usage?.cpuMillicores ?? 0), Int64(object.cpuLimitMillicores), have: usage != nil) }
-    var memPctReq: Double { percent(usage?.memoryBytes ?? 0, object.memoryRequestBytes, have: usage != nil) }
-    var memPctLim: Double { percent(usage?.memoryBytes ?? 0, object.memoryLimitBytes, have: usage != nil) }
-
-    private func percent(_ used: Int64, _ base: Int64, have: Bool) -> Double {
-        guard have, base > 0 else { return -1 }
-        return Double(used) / Double(base) * 100
-    }
+    let cpuMilli: Int
+    let memBytes: Int64
+    let cpuText: String
+    let memText: String
+    let cpuPctReq: Double
+    let cpuPctLim: Double
+    let memPctReq: Double
+    let memPctLim: Double
 
     // Event fields (kubectl events: LAST SEEN, TYPE, REASON, OBJECT, MESSAGE).
-    var eventType: String { object.eventType }
-    var eventReason: String { object.eventReason }
-    var eventObject: String { object.eventObject }
-    var eventMessage: String { object.eventMessage }
-    var sortEventTime: Date { object.eventLastTime ?? .distantPast }
-    var lastSeen: String {
-        let age = shortAge(since: object.eventLastTime)
-        return object.eventCount > 1 ? "\(age) (x\(object.eventCount))" : age
+    let eventType: String
+    let eventReason: String
+    let eventObject: String
+    let eventMessage: String
+    let sortEventTime: Date
+    let lastSeen: String
+
+    init(object: GenericObject, usage: PodUsage?) {
+        id = object.id
+        name = object.name
+        age = object.age
+        sortNamespace = object.sortNamespace
+        sortCreated = object.sortCreated
+        namespaceText = object.namespace ?? "—"
+
+        node = object.nodeName ?? "—"
+        podIP = object.podIP ?? "—"
+        nodeInternalIP = object.nodeInternalIP ?? "—"
+        nodeOSImage = object.nodeOSImage ?? "—"
+        nodeKernelVersion = object.nodeKernelVersion ?? "—"
+        nodeContainerRuntime = object.nodeContainerRuntime ?? "—"
+        serviceType = object.serviceType ?? "—"
+        serviceClusterIP = object.serviceClusterIP ?? "—"
+        let ports = object.servicePorts
+        servicePorts = ports.isEmpty ? "—" : ports
+
+        cpuMilli = usage?.cpuMillicores ?? -1
+        memBytes = usage?.memoryBytes ?? -1
+        cpuText = usage?.cpuDisplay ?? "—"
+        memText = usage?.memoryDisplay ?? "—"
+        let have = usage != nil
+        let usedCPU = Int64(usage?.cpuMillicores ?? 0)
+        let usedMem = usage?.memoryBytes ?? 0
+        cpuPctReq = Self.percent(usedCPU, Int64(object.cpuRequestMillicores), have: have)
+        cpuPctLim = Self.percent(usedCPU, Int64(object.cpuLimitMillicores), have: have)
+        memPctReq = Self.percent(usedMem, object.memoryRequestBytes, have: have)
+        memPctLim = Self.percent(usedMem, object.memoryLimitBytes, have: have)
+
+        eventType = object.eventType
+        eventReason = object.eventReason
+        eventObject = object.eventObject
+        eventMessage = object.eventMessage
+        let last = object.eventLastTime
+        sortEventTime = last ?? .distantPast
+        let ageText = shortAge(since: last)
+        let count = object.eventCount
+        lastSeen = count > 1 ? "\(ageText) (x\(count))" : ageText
+    }
+
+    private static func percent(_ used: Int64, _ base: Int64, have: Bool) -> Double {
+        guard have, base > 0 else { return -1 }
+        return Double(used) / Double(base) * 100
     }
 }
 
