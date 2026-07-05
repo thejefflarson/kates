@@ -29,6 +29,7 @@ struct DetailView: View {
     @State private var replicasText = ""
     @State private var nodePodSort: NodePodSort = .name
     @State private var nodePodSortAsc = true
+    @State private var showYAML = false
 
     enum NodePodSort { case name, namespace, cpu, mem, age }
 
@@ -363,7 +364,10 @@ struct DetailView: View {
     @ViewBuilder
     private var yamlSection: some View {
         if !model.detailYAML.isEmpty {
-            GroupBox {
+            // Collapsed by default: DisclosureGroup doesn't lay out its content
+            // until expanded, so the (potentially large) YAML text isn't
+            // re-rendered on every table sort/refresh while a detail is open.
+            DisclosureGroup(isExpanded: $showYAML) {
                 ScrollView {
                     Text(model.detailYAML)
                         .font(.system(.caption, design: .monospaced))
@@ -371,17 +375,14 @@ struct DetailView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(6)
                 }
-                .frame(maxHeight: 280)
-            } label: {
-                HStack {
-                    Text("YAML")
-                    Spacer()
+                .frame(maxHeight: 360)
+                .overlay(alignment: .topTrailing) {
                     Button { copyToPasteboard(model.detailYAML) } label: {
                         Image(systemName: "doc.on.doc")
                     }
-                    .buttonStyle(.borderless).help("Copy YAML")
+                    .buttonStyle(.borderless).help("Copy YAML").padding(6)
                 }
-            }
+            } label: { Text("YAML").font(.headline) }
         }
     }
 }

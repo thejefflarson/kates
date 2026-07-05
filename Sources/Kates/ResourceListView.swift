@@ -223,7 +223,7 @@ struct ResourceListView: View {
 /// unstructured object (re-parsing its dictionaries, and formatting dates) on
 /// each access made large tables slow to sort — here every field is a stored
 /// value the comparators read directly. Missing values sort as -1 / render "—".
-struct ResourceRow: Identifiable {
+struct ResourceRow: Identifiable, Equatable, Hashable {
     let id: String
     let name: String
     let age: String
