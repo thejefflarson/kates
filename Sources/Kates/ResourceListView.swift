@@ -37,16 +37,19 @@ struct ResourceListView: View {
                         }
                     }
                 }
-            } else if model.selectedObject == nil {
-                // Nothing open: table fills the whole pane.
-                table
             } else {
-                // A resource is open: table shrinks, detail appears below.
+                // Keep the table in one stable position (always the first child
+                // of this VSplitView) and add the detail below only when a row is
+                // selected. Moving the table between if-branches would make
+                // SwiftUI recreate the NSViewRepresentable — a new coordinator
+                // that loses the current sort on the first selection.
                 VSplitView {
                     table
-                        .frame(minHeight: 140, idealHeight: 240)
-                    DetailView()
-                        .frame(minHeight: 240, idealHeight: 380)
+                        .frame(minHeight: 140, maxHeight: .infinity)
+                    if model.selectedObject != nil {
+                        DetailView()
+                            .frame(minHeight: 240, idealHeight: 380)
+                    }
                 }
             }
         }
