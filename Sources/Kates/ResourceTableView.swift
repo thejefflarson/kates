@@ -43,13 +43,14 @@ private func columnFrames(_ columns: [RowColumn], width: CGFloat) -> [(col: RowC
 
 // Cache fonts and the paragraph style once instead of rebuilding them for every
 // cell on every redraw (the draw loop runs ~columns×visibleRows times).
+// Immutable shared instances, only ever read on the main thread during draw.
 private let sz = NSFont.systemFontSize
-private let fontRegular = NSFont.systemFont(ofSize: sz)
-private let fontMedium = NSFont.systemFont(ofSize: sz, weight: .medium)
-private let fontMono = NSFont.monospacedDigitSystemFont(ofSize: sz, weight: .regular)
-private let fontMonoMedium = NSFont.monospacedDigitSystemFont(ofSize: sz, weight: .medium)
-private let headerFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
-private let truncatingParagraph: NSParagraphStyle = {
+nonisolated(unsafe) private let fontRegular = NSFont.systemFont(ofSize: sz)
+nonisolated(unsafe) private let fontMedium = NSFont.systemFont(ofSize: sz, weight: .medium)
+nonisolated(unsafe) private let fontMono = NSFont.monospacedDigitSystemFont(ofSize: sz, weight: .regular)
+nonisolated(unsafe) private let fontMonoMedium = NSFont.monospacedDigitSystemFont(ofSize: sz, weight: .medium)
+nonisolated(unsafe) private let headerFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
+nonisolated(unsafe) private let truncatingParagraph: NSParagraphStyle = {
     let p = NSMutableParagraphStyle(); p.lineBreakMode = .byTruncatingTail; return p
 }()
 
