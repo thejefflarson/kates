@@ -137,31 +137,27 @@ struct ResourceTableView: NSViewRepresentable {
             guard let tableColumn, let col = columnsByID[tableColumn.identifier.rawValue],
                   row < sorted.count else { return nil }
             let id = tableColumn.identifier
-            let cell = (tableView.makeView(withIdentifier: id, owner: self) as? NSTableCellView)
-                ?? Self.makeCell(id)
+            // Return a bare, reused NSTextField — no NSTableCellView wrapper and
+            // no Auto Layout. Wiring constraints per cell made the NSISEngine
+            // solver run for every visible row on every layout pass (the sort
+            // hang in profiling); frame-based reused labels are the fast path.
+            let field = (tableView.makeView(withIdentifier: id, owner: self) as? NSTextField)
+                ?? Self.makeLabel(id)
             let item = sorted[row]
-            cell.textField?.stringValue = col.text(item)
-            cell.textField?.textColor = col.color(item)
-            cell.textField?.font = col.mono
+            field.stringValue = col.text(item)
+            field.textColor = col.color(item)
+            field.font = col.mono
                 ? .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: col.bold ? .medium : .regular)
                 : .systemFont(ofSize: NSFont.systemFontSize, weight: col.bold ? .medium : .regular)
-            return cell
+            return field
         }
 
-        private static func makeCell(_ id: NSUserInterfaceItemIdentifier) -> NSTableCellView {
-            let cell = NSTableCellView()
-            cell.identifier = id
+        private static func makeLabel(_ id: NSUserInterfaceItemIdentifier) -> NSTextField {
             let field = NSTextField(labelWithString: "")
+            field.identifier = id
             field.lineBreakMode = .byTruncatingTail
-            field.translatesAutoresizingMaskIntoConstraints = false
-            cell.addSubview(field)
-            cell.textField = field
-            NSLayoutConstraint.activate([
-                field.leadingAnchor.constraint(equalTo: cell.leadingAnchor),
-                field.trailingAnchor.constraint(equalTo: cell.trailingAnchor),
-                field.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            ])
-            return cell
+            field.usesSingleLineMode = true
+            return field
         }
 
         func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
