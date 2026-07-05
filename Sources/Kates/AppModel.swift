@@ -44,6 +44,7 @@ final class AppModel {
     // UI state
     var selectedResourceID: String?
     private(set) var detailYAML: String = ""
+    private(set) var isRenderingYAML = false
     private(set) var isLoading = false
     var errorMessage: String?          // connection-level (modal)
     private(set) var listError: String?  // per-list (inline, self-healing)
@@ -224,8 +225,18 @@ final class AppModel {
         usage = Dictionary(uniqueKeysWithValues: (samples ?? []).map { ($0.podName, $0) })
     }
 
-    func updateDetail() {
-        detailYAML = selectedObject?.renderYAML() ?? ""
+    /// Renders the selected object's YAML off the main thread (Yams encoding can
+    /// be non-trivial for large objects), with a loading flag so the pulldown
+    /// can show a spinner. Independent of whether the pulldown is open.
+    func updateDetail() async {
+        guard let obj = selectedObject else { detailYAML = ""; isRenderingYAML = false; return }
+        let id = obj.id
+        detailYAML = ""
+        isRenderingYAML = true
+        let yaml = await Task.detached(priority: .userInitiated) { obj.renderYAML() }.value
+        guard selectedResourceID == id else { return }   // selection changed while rendering
+        detailYAML = yaml
+        isRenderingYAML = false
     }
 
     /// Loads events referencing the selected object (describe view). Cleared

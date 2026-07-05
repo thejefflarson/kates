@@ -44,9 +44,9 @@ struct DetailView: View {
         // .task(id:) runs on first appearance AND on every selection change,
         // so YAML shows even on the first selection (onChange would skip it).
         .task(id: model.selectedResourceID) {
-            model.updateDetail()
             replicasText = model.selectedObject?.specReplicas.map(String.init) ?? ""
             if let obj = model.selectedObject { await model.loadEvents(for: obj) }
+            await model.updateDetail()
         }
     }
 
@@ -342,7 +342,7 @@ struct DetailView: View {
     private func header(_ obj: GenericObject) -> some View {
         // Single line so the name centers cleanly with the icon; the kind is
         // already shown as the first row of the metadata grid below.
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             Image(systemName: "cube.box").font(.largeTitle).foregroundStyle(.tint)
             Text(obj.name).font(.title3.weight(.semibold)).textSelection(.enabled)
             Spacer()
@@ -362,11 +362,15 @@ struct DetailView: View {
 
     @ViewBuilder
     private var yamlSection: some View {
-        if !model.detailYAML.isEmpty {
-            // Collapsed by default: Collapsible doesn't build its content until
-            // expanded, so the (potentially large) YAML text isn't laid out
-            // while a detail is open.
-            Collapsible("YAML") {
+        // Always present so open/close is independent of load state; shows a
+        // spinner while the YAML renders off-thread.
+        Collapsible("YAML") {
+            if model.isRenderingYAML {
+                HStack { Spacer(); ProgressView().controlSize(.small); Spacer() }
+                    .padding(.vertical, 8)
+            } else if model.detailYAML.isEmpty {
+                Text("—").foregroundStyle(.secondary).padding(.vertical, 4)
+            } else {
                 ScrollView {
                     Text(model.detailYAML)
                         .font(.system(.caption, design: .monospaced))
