@@ -124,6 +124,7 @@ struct ResourceListView: View {
                 .sorted(using: sortOrder)
             let showsNamespace = model.selectedType?.namespaced ?? false
             let showsUsage = model.selectedType?.hasMetrics ?? false
+            let showsPercents = model.selectedType?.isPod ?? false
             let showsWide = model.selectedType?.isPod ?? false
             let isNode = model.selectedType?.isNode ?? false
             let isService = model.selectedType?.isService ?? false
@@ -138,15 +139,24 @@ struct ResourceListView: View {
                     .width(min: 90, ideal: 120)
                 }
                 if showsUsage {
-                    // Usage with request/limit % folded in (e.g. "12m · 45%/12%").
                     TableColumn("CPU", value: \.cpuMilli) {
-                        Text($0.cpuCell).foregroundStyle($0.cpuHot ? .red : .secondary).monospacedDigit()
+                        Text($0.cpuText).foregroundStyle(.secondary).monospacedDigit()
                     }
-                    .width(min: 72, ideal: 130)
+                    .width(min: 56, ideal: 64)
                     TableColumn("Memory", value: \.memBytes) {
-                        Text($0.memCell).foregroundStyle($0.memHot ? .red : .secondary).monospacedDigit()
+                        Text($0.memText).foregroundStyle(.secondary).monospacedDigit()
                     }
-                    .width(min: 72, ideal: 140)
+                    .width(min: 64, ideal: 76)
+                }
+                if showsPercents {
+                    TableColumn("CPU/req", value: \.cpuPctReq) { PercentCell($0.cpuPctReq) }
+                        .width(min: 64, ideal: 72)
+                    TableColumn("CPU/lim", value: \.cpuPctLim) { PercentCell($0.cpuPctLim) }
+                        .width(min: 64, ideal: 72)
+                    TableColumn("Mem/req", value: \.memPctReq) { PercentCell($0.memPctReq) }
+                        .width(min: 64, ideal: 72)
+                    TableColumn("Mem/lim", value: \.memPctLim) { PercentCell($0.memPctLim) }
+                        .width(min: 64, ideal: 72)
                 }
                 // kubectl -o wide extras (pods): node placement and pod IP.
                 if showsWide {
@@ -236,13 +246,12 @@ struct ResourceRow: Identifiable, Equatable, Hashable {
 
     let cpuMilli: Int
     let memBytes: Int64
-    // Usage with request/limit % folded in ("12m · 45%/12%") so the pod table
-    // needs 2 metric columns instead of 6 — SwiftUI Table scales poorly with
-    // column count, which made the 11-column pod table slow to sort.
-    let cpuCell: String
-    let memCell: String
-    let cpuHot: Bool     // usage over a request/limit → render red
-    let memHot: Bool
+    let cpuText: String
+    let memText: String
+    let cpuPctReq: Double
+    let cpuPctLim: Double
+    let memPctReq: Double
+    let memPctLim: Double
 
     // Event fields (kubectl events: LAST SEEN, TYPE, REASON, OBJECT, MESSAGE).
     let eventType: String
@@ -273,17 +282,15 @@ struct ResourceRow: Identifiable, Equatable, Hashable {
 
         cpuMilli = usage?.cpuMillicores ?? -1
         memBytes = usage?.memoryBytes ?? -1
+        cpuText = usage?.cpuDisplay ?? "—"
+        memText = usage?.memoryDisplay ?? "—"
         let have = usage != nil
         let usedCPU = Int64(usage?.cpuMillicores ?? 0)
         let usedMem = usage?.memoryBytes ?? 0
-        let cpuReq = Self.percent(usedCPU, Int64(object.cpuRequestMillicores), have: have)
-        let cpuLim = Self.percent(usedCPU, Int64(object.cpuLimitMillicores), have: have)
-        let memReq = Self.percent(usedMem, object.memoryRequestBytes, have: have)
-        let memLim = Self.percent(usedMem, object.memoryLimitBytes, have: have)
-        cpuCell = Self.metricCell(usage?.cpuDisplay, cpuReq, cpuLim)
-        memCell = Self.metricCell(usage?.memoryDisplay, memReq, memLim)
-        cpuHot = cpuReq > 100 || cpuLim > 100
-        memHot = memReq > 100 || memLim > 100
+        cpuPctReq = Self.percent(usedCPU, Int64(object.cpuRequestMillicores), have: have)
+        cpuPctLim = Self.percent(usedCPU, Int64(object.cpuLimitMillicores), have: have)
+        memPctReq = Self.percent(usedMem, object.memoryRequestBytes, have: have)
+        memPctLim = Self.percent(usedMem, object.memoryLimitBytes, have: have)
 
         eventType = object.eventType
         eventReason = object.eventReason
@@ -300,13 +307,20 @@ struct ResourceRow: Identifiable, Equatable, Hashable {
         guard have, base > 0 else { return -1 }
         return Double(used) / Double(base) * 100
     }
+}
 
-    /// "12m · 45%/12%" — usage plus request/limit percentages (or just usage
-    /// when there are no requests/limits, e.g. nodes; "—" when no metrics).
-    private static func metricCell(_ usage: String?, _ req: Double, _ lim: Double) -> String {
-        guard let usage else { return "—" }
-        func p(_ v: Double) -> String { v < 0 ? "—" : "\(Int(v.rounded()))%" }
-        guard req >= 0 || lim >= 0 else { return usage }
-        return "\(usage) · \(p(req))/\(p(lim))"
+/// Renders a percentage (or "—" when unset); >100% is highlighted red.
+struct PercentCell: View {
+    let value: Double
+    init(_ value: Double) { self.value = value }
+
+    var body: some View {
+        if value < 0 {
+            Text("—").foregroundStyle(.secondary)
+        } else {
+            Text("\(Int(value.rounded()))%")
+                .monospacedDigit()
+                .foregroundStyle(value > 100 ? .red : .secondary)
+        }
     }
 }
