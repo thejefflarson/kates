@@ -340,20 +340,14 @@ struct DetailView: View {
     // MARK: - Building blocks
 
     private func header(_ obj: GenericObject) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        // Single line so the name centers cleanly with the icon; the kind is
+        // already shown as the first row of the metadata grid below.
+        HStack(spacing: 12) {
             Image(systemName: "cube.box").font(.largeTitle).foregroundStyle(.tint)
-                .frame(height: titleBlockHeight)      // match the text block so centering is true
-            VStack(alignment: .leading, spacing: 1) {
-                Text(obj.name).font(.title3.weight(.semibold)).textSelection(.enabled)
-                Text(obj.kind).foregroundStyle(.secondary)
-            }
+            Text(obj.name).font(.title3.weight(.semibold)).textSelection(.enabled)
             Spacer()
         }
     }
-
-    // Approx height of the two-line name/kind block, so the icon frame matches
-    // it and vertical centering lands the icon against the title, not above it.
-    private let titleBlockHeight: CGFloat = 40
 
     private func keyValues(_ pairs: [(String, String)]) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
